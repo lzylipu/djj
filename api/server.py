@@ -1,4 +1,4 @@
-import random, os, httpx
+import random, os, httpx, subprocess, asyncio, json
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
@@ -59,7 +59,21 @@ async def _fetch_remote(remote_url):
             token = register_remote(video_url, video_name)
             return {"token": token, "name": video_name, "remote": True}
         except Exception:
-            # 非JSON也非视频 → 尝试当视频URL用
+            # HTML页面: 尝试提取 video src
+            html = resp.text
+            srcs = __import__("re").findall(r'src="([^"]*\.mp4[^"]*)"', html)
+            if not srcs:
+                srcs = __import__("re").findall(r"src='([^']*\.mp4[^']*)'", html)
+            if srcs:
+                video_url = srcs[0]
+                if video_url.startswith("//"):
+                    video_url = "https:" + video_url
+                elif video_url.startswith("/"):
+                    parsed = __import__("urllib.parse").urlparse(str(resp.url))
+                    video_url = f"{parsed.scheme}://{parsed.netloc}{video_url}"
+                token = register_remote(video_url, "热舞视频")
+                return {"token": token, "name": "热舞视频", "remote": True}
+            # 都不匹配 → 尝试当视频URL用
             video_url = str(resp.url)
             token = register_remote(video_url, "未知")
             return {"token": token, "name": "未知", "remote": True}
@@ -101,6 +115,40 @@ async def api_random(source: str | None = None):
     return {"token": token, "name": get_name(token)}
 
 
+FFMPEG_PATH = "/usr/bin/ffmpeg"
+
+async def _transcode_if_needed(file_path: str):
+    """检测视频编码，非H.264则ffmpeg实时转码"""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "-show_streams", "-select_streams", "v:0", file_path,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        info = json.loads(stdout)
+        codec = info.get("streams", [{}])[0].get("codec_name", "")
+        if codec in ("h264", "hevc", "av1"):
+            return None  # 浏览器原生支持，不需要转码
+        return codec  # 需要转码
+    except Exception:
+        return None
+
+async def _ffmpeg_stream(file_path: str):
+    """用ffmpeg实时转码为H.264 mp4返回流"""
+    proc = await asyncio.create_subprocess_exec(
+        FFMPEG_PATH, "-i", file_path,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+        "-c:a", "aac", "-b:a", "128k",
+        "-movflags", "frag_keyframe+empty_moov",
+        "-f", "mp4",
+        "-",  # stdout
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    return proc
+
+
 @app.get("/api/play")
 async def api_play(token: str):
     if is_remote_token(token):
@@ -123,6 +171,18 @@ async def api_play(token: str):
     file_path = resolve_token(token)
     if not file_path or not os.path.isfile(file_path):
         return JSONResponse({"error": "invalid token"}, status_code=403)
+
+    # 检测视频编码，非H.264自动转码
+    codec = await _transcode_if_needed(file_path)
+    if codec:
+        print(f"[djj] Transcoding {Path(file_path).name} ({codec} -> h264)")
+        proc = await _ffmpeg_stream(file_path)
+        return StreamingResponse(
+            content=proc.stdout,
+            media_type="video/mp4",
+            headers={"X-Transcoded": codec},
+        )
+
     path = Path(file_path)
     mime = {".mp4": "video/mp4", ".avi": "video/x-msvideo", ".mkv": "video/x-matroska",
             ".mov": "video/quicktime", ".webm": "video/webm", ".flv": "video/x-flv"}.get(path.suffix.lower(), "video/mp4")

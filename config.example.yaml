@@ -2,56 +2,29 @@ server:
   port: 8080
   secret: change-me-to-random-string
 
-# 视频源: 源名: 路径或URL
-# / 开头 = 本地目录(自动识别)
-# http 开头 = 远程API(自动识别)
+# 视频源: 源名: URL
+# / 开头 = 本地目录(自动扫描)
+# http开头 = 远程API(自动识别)
 #
-# 远程源支持两种格式:
-#   JSON: {"url":"...", "video_url":"...", "data":{"url":"...", "link":"..."}}
-#   直接mp4流: 响应头 content-type=video/mp4（如 v.nrzj.vip）
-#
-# 提示: 如果某个源失效，直接删除或注释掉该行即可
+# 远程源格式:
+#   JSON: {"url":"...", "data":{"link":"..."}}
+#   直接mp4流: 每次请求返回一个随机mp4
+#   HTML: 自动提取 video src
 sources:
-  默认: /videos
+  # --- 本地目录 ---
+  # 默认: /videos
   # 舞蹈: /videos/舞蹈
   # 搞笑: /videos/搞笑
 
-  # --- 远程随机视频API ---
-  # 小姐姐(JSON): 返回 {"status":1,"url":"...","data":{"link":"..."}}
+  # --- 远程源(已验证) ---
+  # 小姐姐视频: JSON API, 返回快手随机视频
   小姐姐: https://tmini.net/api/meinv?mp4=json&r=
 
-  # 绅士视频(直接mp4流): 每次请求返回一个随机mp4视频
+  # 绅士视频: 直接mp4流, 每次返回不同快手视频
   绅士视频: https://v.nrzj.vip/video.php
 
-  # 随机视频(直接mp4流): 每次请求返回一个随机mp4
-  随机视频: https://api.1314.fit/api/video
+  # 随机视频: 直接mp4流, 快手H.264编码
+  随便看: https://api.yujn.cn/api/zzxjj.php
 
-  # 随机视频(JSON): 返回 {"code":200,"url":"..."}
-  随机视频2: https://api.1314.fit/api/video/url
-
-  # 美女热舞(JSON): 返回 {"code":0,"data":"..."}
-  美女热舞: https://api.likest.cn/api/video
-
-  # 随机小姐姐(JSON): 返回 {"code":200,"url":"..."}
-  随机小姐姐: https://api.jolalucky.com/api/random_video
-
-  # 随机视频(直接mp4流)
-  随机视频3: https://v.api.aa1.cn/api/video/ns/
-
-  # 随机视频(JSON): 返回 {"msg":"...","data":{"link":"..."}}
-  随机视频4: https://www.btstu.cn/api/randvideo
-
-  # 韩舞(直接mp4流)
-  韩舞: https://api.1314.fit/api/hanwu
-
-  # 热舞(JSON): 返回 {"url":"..."}
-  热舞: https://api.qfh5.cn/api/rmsp
-
-  # 随机视频(JSON): 返回 {"videoUrl":"..."} 或 {"url":"..."}
-  随机视频5: https://www.xm08.cn/api/mv.php
-
-  # 随机视频(直接mp4流)
-  随机视频6: https://tucdn.wpon.cn/api-girl/index.php?type=video
-
-  # 随机视频(JSON): 返回 {"url":"..."}
-  随机视频7: https://www.liaoban.cn/rand/cos-json/api.php
+  # tucdn: HTML页面, 内含随机video src
+  热舞视频: https://tucdn.wpon.cn/api-girl/index.php?type=video
