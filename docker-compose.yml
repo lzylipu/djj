@@ -1,16 +1,19 @@
-name: djj
-
+version: "3"
 services:
   djj:
     image: lzylipu/djj:latest
     container_name: djj
-    restart: unless-stopped
     ports:
       - "8080:8080"
     volumes:
       - djj-data:/data
-      - /path/to/videos1:/videos/dance:ro
-      - /path/to/videos2:/videos/funny:ro
+      # 视频目录挂载(只读), 名称对应config.yaml中的sources
+      # - /你的视频目录/舞蹈:/videos/舞蹈:ro
+      # - /你的视频目录/搞笑:/videos/搞笑:ro
+    environment:
+      - PORT=8080
+      # - API_SECRET=your-secret
+    restart: unless-stopped
 
 volumes:
   djj-data:
