@@ -6,12 +6,17 @@ from .auth import register_file
 _source_index = {}      # name -> [token, ...]
 _name_index = {}        # token -> display_name
 _remote_sources = {}    # name -> {"url": "..."}
-_local_sources = {}    # name -> path
+_local_sources = {}     # name -> path
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mkv", ".mov", ".webm", ".flv"}
 
 
 def scan_all():
     sources = CFG.get("sources", [])
+    _source_index.clear()
+    _name_index.clear()
+    _remote_sources.clear()
+    _local_sources.clear()
+
     if not sources:
         print("[djj] WARNING: No sources configured. Edit /data/config.yaml and restart.")
         return
@@ -24,7 +29,7 @@ def scan_all():
             url = src.get("url", "")
             if url:
                 _remote_sources[name] = {"url": url}
-                _source_index[name] = []
+                _source_index[name] = []  # remote源的token列表为空，server层动态fetch
                 print(f"[djj] REMOTE {name}: {url}")
             continue
 
@@ -70,11 +75,21 @@ def get_random(name):
 
 
 def get_random_any():
-    local_sources = {k: v for k, v in _source_index.items() if not is_remote_source(k) and v}
-    if not local_sources:
+    """从所有源随机选一个视频（优先本地，可混合远程）"""
+    all_sources = list(_source_index.keys())
+    if not all_sources:
         return None
-    all_tokens = [t for ts in local_sources.values() for t in ts]
-    return random.choice(all_tokens) if all_tokens else None
+
+    # 有remote源时也标记为空列表，但只从local源取token
+    local_tokens = []
+    for name in all_sources:
+        if not is_remote_source(name):
+            tokens = _source_index.get(name, [])
+            local_tokens.extend(tokens)
+
+    if local_tokens:
+        return random.choice(local_tokens)
+    return None
 
 
 def get_name(token):
@@ -83,13 +98,13 @@ def get_name(token):
 
 def get_stats():
     sources = {}
-    for n, tokens in _source_index.items():
+    for n in sorted(_source_index.keys()):
         if is_remote_source(n):
             sources[n] = {"type": "remote", "count": -1, "url": _remote_sources[n]["url"]}
         else:
-            sources[n] = {"type": "local", "count": len(tokens), "path": _local_sources.get(n, "")}
+            sources[n] = {"type": "local", "count": len(_source_index.get(n, [])), "path": _local_sources.get(n, "")}
     return {
         "sources": sources,
-        "local_total": sum(s["count"] for s in sources.values() if s["count"] >= 0),
+        "local_total": sum(s["count"] for s in sources.values() if s["type"] == "local"),
         "remote_count": len(_remote_sources),
     }

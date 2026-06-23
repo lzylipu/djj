@@ -62,14 +62,27 @@ async def _fetch_remote(remote_url):
             return {"token": token, "name": "远程视频", "remote": True}
 
         # JSON响应（如 tmini mp4=json）
-        try:
-            data = resp.json()
-            video_url, video_name = _parse_remote_response(data, resp)
-            if video_url:
-                token = register_remote(video_url, video_name)
-                return {"token": token, "name": video_name, "remote": True}
-        except Exception:
-            pass
+        for attempt in range(3):
+            try:
+                data = resp.json()
+                video_url, video_name = _parse_remote_response(data, resp)
+                if video_url:
+                    token = register_remote(video_url, video_name)
+                    return {"token": token, "name": video_name, "remote": True}
+                # 空url → 重试（tmini偶尔返回空）
+                import asyncio
+                await asyncio.sleep(0.5)
+                resp = await http_client.get(remote_url, timeout=15.0, follow_redirects=False)
+                if resp.status_code in (301, 302, 303, 307, 308):
+                    location = resp.headers.get("location", "")
+                    if location:
+                        if location.startswith("//"):
+                            location = "https:" + location
+                        token = register_remote(location, "远程视频")
+                        return {"token": token, "name": "远程视频", "remote": True}
+            except Exception:
+                if attempt == 2:
+                    pass
 
         # HTML页面: 提取 video src（如 tucdn）
         html = resp.text

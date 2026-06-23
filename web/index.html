@@ -143,22 +143,26 @@ async function fetchRandom(){
 async function playNext(){
   if(L)return;L=true;
   if(vidS)vidS.textContent='加载中...';
-  try{
-    var d=await fetchRandom();
-    player.src='/api/play?token='+encodeURIComponent(d.token);
-    try{await player.play()}catch(e){}
-    /* force unmute on every new video */
-    player.muted=false;soundOn=true;if(sHint)sHint.style.display='none';
-    if(vidS)vidS.textContent='▶ 播放中';
-    if(vidN)vidN.textContent='@'+(d.name||'未知');
-    if(Hi<H.length-1)H=H.slice(0,Hi+1);
-    H.push({token:d.token,name:d.name||'未知'});
-    if(H.length>50)H.shift();
-    Hi=H.length-1;
-    updLoveUI(GF().some(function(x){return x.token===d.token}));
-    updUI()
-  }catch(e){if(vidS)vidS.textContent='加载失败';toast('加载失败')}
-  finally{L=false}
+  for(var retry=0;retry<3;retry++){
+    try{
+      var d=await fetchRandom();
+      player.src='/api/play?token='+encodeURIComponent(d.token);
+      try{await player.play()}catch(e){}
+      player.muted=false;soundOn=true;if(sHint)sHint.style.display='none';
+      if(vidS)vidS.textContent='▶ 播放中';
+      if(vidN)vidN.textContent='@'+(d.name||'未知');
+      if(Hi<H.length-1)H=H.slice(0,Hi+1);
+      H.push({token:d.token,name:d.name||'未知'});
+      if(H.length>50)H.shift();
+      Hi=H.length-1;
+      updLoveUI(GF().some(function(x){return x.token===d.token}));
+      updUI();
+      L=false;return
+    }catch(e){}
+  }
+  if(vidS)vidS.textContent='加载失败';
+  toast('加载失败，已重试3次');
+  L=false
 }
 
 function playPrev(){
