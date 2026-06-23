@@ -1,0 +1,43 @@
+# DJJ 配置文件
+# =============================================
+# 部署时挂载此文件到容器 /app/config.yaml
+# 增删源只需修改此文件，重启容器生效
+# docker compose restart djj
+# =============================================
+
+# 服务设置
+server:
+  port: 8080                    # 监听端口
+  secret: change-me-to-random   # 签名密钥，务必修改为随机字符串！
+
+# 视频源列表
+# 每一项就是一个源，前端换源时能看到名称
+# type=local  → 本地文件夹，path填容器内路径（通过volume挂载进来）
+# type=remote → 远程API，url填接口地址（需返回JSON: {"video_url":"直链","name":"标题"}）
+sources:
+  # ---- 本地视频目录 ----
+  - name: 舞蹈
+    type: local
+    path: /videos/舞蹈
+
+  - name: 搞笑
+    type: local
+    path: /videos/搞笑
+
+  - name: 风景
+    type: local
+    path: /videos/风景
+
+  # ---- 远程API源 ----
+  # 取消注释即可启用，url指向的API需返回视频直链
+  # - name: 在线热舞
+  #   type: remote
+  #   url: https://api.example.com/random
+
+  # - name: 搞笑合集
+  #   type: remote
+  #   url: https://api2.example.com/next
+
+# ---- 支持的视频格式 ----
+# .mp4 .avi .mkv .mov .webm .flv
+# 本地源会递归扫描子目录，自动索引所有视频文件
