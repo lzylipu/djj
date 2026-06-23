@@ -42,7 +42,7 @@ async def _fetch_remote(remote_url):
     try:
         resp = await http_client.get(remote_url, timeout=15.0)
         resp.raise_for_status()
-        content_type = resp.headers.get("content-type", "")
+        content_type = resp.headers.get("content-type", "").lower()
 
         # 直接返回视频流（如 v.nrzj.vip/video.php）
         if "video" in content_type or "octet-stream" in content_type:
@@ -108,9 +108,10 @@ async def api_play(token: str):
         if not info:
             return JSONResponse({"error": "invalid remote token"}, status_code=403)
         try:
-            resp = await http_client.get(info["url"], timeout=60.0)
+            resp = await http_client.get(info["url"], timeout=60.0, follow_redirects=True)
             resp.raise_for_status()
-            content_type = resp.headers.get("content-type", "video/mp4")
+            ct = resp.headers.get("content-type", "").lower()
+            content_type = "video/mp4" if not ct or ct == "application/octet-stream" else ct
             return StreamingResponse(
                 content=resp.aiter_bytes(chunk_size=65536),
                 media_type=content_type,
