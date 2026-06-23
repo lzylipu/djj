@@ -13,6 +13,6 @@ services:
     environment:
       - VIDEO_DIRS=${VIDEO_DIRS:-["/videos"]}
       - SOURCE_NAMES=${SOURCE_NAMES:-["默认"]}
-      - API_SECRET=${API_SECRET}
+      - API_SECRET=change-me-to-a-random-string
     env_file:
       - .env
