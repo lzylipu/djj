@@ -6,25 +6,26 @@ server:
 # / 开头 = 本地目录(自动扫描)
 # http开头 = 远程API(自动识别)
 #
-# 远程源格式:
-#   JSON: {"url":"...", "data":{"link":"..."}}
-#   直接mp4流: 每次请求返回一个随机mp4
-#   HTML: 自动提取 video src
+# 支持的远程源类型:
+#   · 302跳转: 取Location头中的mp4 URL (v.nrzj.vip, tmini _t)
+#   · JSON API: 提取url/video_url/data.link (tmini mp4=json)
+#   · 直接mp4流: 每次返回随机mp4 (yujn)
+#   · HTML: 提取video src (tucdn)
 sources:
-  # --- 本地目录 ---
+  # --- 本地目录(取消注释即可启用) ---
   # 默认: /videos
   # 舞蹈: /videos/舞蹈
   # 搞笑: /videos/搞笑
 
   # --- 远程源(已验证) ---
-  # 小姐姐视频: JSON API, 返回快手随机视频
+  # 小姐姐视频: JSON API -> 快手随机视频
   小姐姐: https://tmini.net/api/meinv?mp4=json&r=
 
-  # 绅士视频: 直接mp4流, 每次返回不同快手视频
+  # 绅士视频: 302跳转 -> 快手mp4
   绅士视频: https://v.nrzj.vip/video.php
 
-  # 随机视频: 直接mp4流, 快手H.264编码
+  # 随机视频: 直接mp4流, 快手H.264
   随便看: https://api.yujn.cn/api/zzxjj.php
 
-  # tucdn: HTML页面, 内含随机video src
+  # 热舞视频: HTML页面 -> 提取video src
   热舞视频: https://tucdn.wpon.cn/api-girl/index.php?type=video

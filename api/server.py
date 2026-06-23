@@ -38,45 +38,56 @@ def _parse_remote_response(data, resp):
 
 
 async def _fetch_remote(remote_url):
-    """请求远程API获取视频，兼容JSON和直接mp4流"""
+    """请求远程视频源，兼容：302 Location跳转、JSON API、直接mp4流、HTML"""
     try:
-        resp = await http_client.get(remote_url, timeout=15.0)
+        # 第一步：发请求，不follow redirect，检查是否302跳转
+        resp = await http_client.get(remote_url, timeout=15.0, follow_redirects=False)
+        
+        # 302/301跳转 → 取Location（如 v.nrzj.vip、tmini _t=0.）
+        if resp.status_code in (301, 302, 303, 307, 308):
+            location = resp.headers.get("location", "")
+            if location:
+                if location.startswith("//"):
+                    location = "https:" + location
+                token = register_remote(location, "远程视频")
+                return {"token": token, "name": "远程视频", "remote": True}
+
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "").lower()
 
-        # 直接返回视频流（如 v.nrzj.vip/video.php）
+        # 直接mp4流
         if "video" in content_type or "octet-stream" in content_type:
             video_url = str(resp.url)
             token = register_remote(video_url, "远程视频")
             return {"token": token, "name": "远程视频", "remote": True}
 
-        # JSON响应
+        # JSON响应（如 tmini mp4=json）
         try:
             data = resp.json()
             video_url, video_name = _parse_remote_response(data, resp)
-            if not video_url:
-                return None
-            token = register_remote(video_url, video_name)
-            return {"token": token, "name": video_name, "remote": True}
+            if video_url:
+                token = register_remote(video_url, video_name)
+                return {"token": token, "name": video_name, "remote": True}
         except Exception:
-            # HTML页面: 尝试提取 video src
-            html = resp.text
-            srcs = __import__("re").findall(r'src="([^"]*\.mp4[^"]*)"', html)
-            if not srcs:
-                srcs = __import__("re").findall(r"src='([^']*\.mp4[^']*)'", html)
+            pass
+
+        # HTML页面: 提取 video src（如 tucdn）
+        html = resp.text
+        for pat in [r'src="([^"]*\.mp4[^"]*)"', r"src='([^']*\.mp4[^']*)'"]:
+            srcs = __import__("re").findall(pat, html)
             if srcs:
                 video_url = srcs[0]
                 if video_url.startswith("//"):
                     video_url = "https:" + video_url
                 elif video_url.startswith("/"):
-                    parsed = __import__("urllib.parse").urlparse(str(resp.url))
+                    from urllib.parse import urlparse
+                    parsed = urlparse(str(resp.url))
                     video_url = f"{parsed.scheme}://{parsed.netloc}{video_url}"
                 token = register_remote(video_url, "热舞视频")
                 return {"token": token, "name": "热舞视频", "remote": True}
-            # 都不匹配 → 尝试当视频URL用
-            video_url = str(resp.url)
-            token = register_remote(video_url, "未知")
-            return {"token": token, "name": "未知", "remote": True}
+
+        # 都不匹配
+        return None
     except httpx.HTTPError as e:
         print(f"[djj] Remote fetch failed: {e}")
         return None
@@ -156,7 +167,12 @@ async def api_play(token: str):
         if not info:
             return JSONResponse({"error": "invalid remote token"}, status_code=403)
         try:
-            resp = await http_client.get(info["url"], timeout=60.0, follow_redirects=True)
+            # 直接在最终视频URL上加随机参数防缓存
+            import random
+            vid_url = info["url"]
+            sep = "&" if "?" in vid_url else "?"
+            vid_url += f"{sep}_t={random.random()}"
+            resp = await http_client.get(vid_url, timeout=60.0, follow_redirects=True)
             resp.raise_for_status()
             ct = resp.headers.get("content-type", "").lower()
             content_type = "video/mp4" if not ct or ct == "application/octet-stream" else ct
