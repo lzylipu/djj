@@ -1,19 +1,24 @@
-version: "3"
+version: "3.8"
+
 services:
   djj:
     image: lzylipu/djj:latest
     container_name: djj
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      - TZ=Asia/Shanghai
+      - API_SECRET=your-secret-key-change-me
+      - PORT=8080
     ports:
       - "8080:8080"
     volumes:
       - djj-data:/data
-      # 视频目录挂载(只读, 目录名=源名)
-      # - /path/to/videos:/videos/默认:ro
-      # - /path/to/舞蹈:/videos/舞蹈:ro
-    environment:
-      - PORT=8080
-      # 密钥环境变量见.env.example
-    restart: unless-stopped
+      - /srv/videos:/videos:ro
 
 volumes:
   djj-data:
