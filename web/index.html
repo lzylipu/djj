@@ -265,6 +265,12 @@ if(!isM){document.addEventListener('keydown',function(e){
   }
 })}
 
+/* PC mouse wheel → volume */
+if(!isM){document.addEventListener('wheel',function(e){
+  e.preventDefault();
+  player.volume=Math.max(0,Math.min(1,player.volume-e.deltaY*0.002));
+  if(player.volume===0)player.muted=true;else player.muted=false
+},{passive:!1})}
 /* sources */
 async function loadSources(){try{var r=await fetch('/api/sources'),d=await r.json();SL=d.sources||[]}catch(e){}}
 
