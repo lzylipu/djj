@@ -6,9 +6,11 @@ services:
     container_name: djj
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:8080"
+      - "8080:8080"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ${VIDEO_DIR:-./videos}:/videos:ro
-    env_file:
-      - .env
+      - djj-data:/data
+      - /path/to/videos1:/videos/dance:ro
+      - /path/to/videos2:/videos/funny:ro
+
+volumes:
+  djj-data:
