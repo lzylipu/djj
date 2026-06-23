@@ -2,17 +2,13 @@ name: djj
 
 services:
   djj:
-    build: .
-    image: djj:latest
+    image: lzylipu/djj:latest
     container_name: djj
     restart: unless-stopped
     ports:
       - "${PORT:-8080}:8080"
     volumes:
+      - ./config.yaml:/app/config.yaml:ro
       - ${VIDEO_DIR:-./videos}:/videos:ro
-    environment:
-      - VIDEO_DIRS=${VIDEO_DIRS:-["/videos"]}
-      - SOURCE_NAMES=${SOURCE_NAMES:-["默认"]}
-      - API_SECRET=change-me-to-a-random-string
     env_file:
       - .env
