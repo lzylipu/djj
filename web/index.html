@@ -4,204 +4,77 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="google" value="notranslate">
-<meta name="author" content="DJJ">
-<meta name="description" content="随机视频播放站">
 <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
 <title>DJJ</title>
 <link rel="stylesheet" href="/css/style.css">
 </head>
-<body class="mobile">
-
+<body>
 <div class="app" ontouchmove="return false;">
-    <video id="player" autoplay preload muted playsinline webkit-playsinline
+    <video id="player" autoplay preload muted playsinline controlslist="nodownload"
            x5-video-player-type="h5" x5-video-player-fullscreen="true"
            x5-video-ignore-metadata="true" poster="/img/bg.gif"></video>
-</div>
-
-<div id="hints">
-    <div>上滑 - 下一个</div>
-    <div>下滑 - 上一个</div>
-    <div>左滑 - 隐藏文字</div>
-    <div>右滑 - 显示文字</div>
-    <div>单击 - 播放/暂停</div>
-    <div>双击 - 全屏</div>
-</div>
-
-<div id="texts">
-    <span class="username" id="username">@DJJ</span>
-    <div class="disclaimer">仅供学习研究，视频采集自网络<br>
-        <span class="msg" id="msg">正在加载...</span>
+    <div class="sidebar" id="sidebar">
+        <h3>随机视频</h3>
+        <div class="hint">Space 暂停 | N 下一个 | P 上一个 | F 全屏 | S 换源 | M 模式</div>
+        <div class="hint source-label">点击换源切换数据源</div>
+        <div class="hint love-label">点击爱心收藏</div>
+        <button class="ctrl-btn mode-btn" id="btnMode">循环</button>
+        <button class="ctrl-btn pass-btn" id="btnPass">PASS</button>
+        <img class="love-btn" id="btnLove" src="/img/love.png" alt="love">
+        <button class="ctrl-btn source-btn" id="btnSource">换源</button>
+        <button class="ctrl-btn fav-btn" id="btnFav">收藏</button>
+        <div class="disclaimer-pc">仅供学习研究，视频采集自网络</div>
     </div>
 </div>
-
+<div id="texts">
+    <span class="username" id="username">@DJJ</span>
+    <div class="disclaimer">仅供学习研究，视频采集自网络<br><span class="msg" id="msg">加载中...</span></div>
+</div>
 <span id="time">00:00:00</span>
-
+<div id="hints"><div>上滑-下一个</div><div>下滑-上一个</div><div>左右滑-显隐文字</div><div>单击-暂停</div><div>双击-全屏</div></div>
 <div id="controls">
-    <button class="btn-mode" id="btnMode">循环</button>
-    <button class="btn-source" id="btnSource">换源</button>
-    <button class="btn-pass" id="btnPass">PASS</button>
-    <img class="btn-love" id="btnLove" src="/img/love.png" alt="收藏">
+    <button class="btn-mode" id="btnModeM">循环</button>
+    <button class="btn-source" id="btnSourceM">换源</button>
+    <button class="btn-pass" id="btnPassM">PASS</button>
+    <img class="btn-love" id="btnLoveM" src="/img/love.png" alt="love">
 </div>
-
-<div class="fav-panel" id="favPanel">
-    <div class="fav-header">我的收藏</div>
-    <button class="fav-close" id="favClose">&times;</button>
-    <div id="favList"></div>
-</div>
-
+<div class="fav-panel" id="favPanel"><div class="fav-header">收藏</div><button class="fav-close" id="favClose">X</button><div id="favList"></div></div>
 <script>
-const HISTORY_MAX = 50;
-const FAV_KEY = "djj_favs";
-let currentMode = "loop", sourceIdx = -1, sourceList = [], textVisible = true;
-let history = [], historyIdx = -1, loading = false;
-const player = document.getElementById("player");
-const elMsg = document.getElementById("msg");
-const elUsername = document.getElementById("username");
-const elHints = document.getElementById("hints");
-
-setInterval(() => {
-    const d = new Date();
-    document.getElementById("time").textContent =
-        [d.getHours(), d.getMinutes(), d.getSeconds()].map(n => String(n).padStart(2,"0")).join(":");
-}, 1000);
-setTimeout(() => elHints.classList.add("hidden"), 10000);
-
-function toast(msg) {
-    const el = document.createElement("div"); el.className = "toast"; el.textContent = msg;
-    document.body.appendChild(el); setTimeout(() => el.remove(), 1600);
-}
-
-function getFavs() { try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch { return []; } }
-function saveFavs(favs) { localStorage.setItem(FAV_KEY, JSON.stringify(favs)); }
-function updateLoveIcon(isFav) { document.getElementById("btnLove").src = isFav ? "/img/loves.png" : "/img/love.png"; }
-
-function addFav(token, name) {
-    const favs = getFavs();
-    if (favs.some(f => f.token === token)) { toast("已收藏"); return; }
-    favs.unshift({token, name, ts: Date.now()}); saveFavs(favs); updateLoveIcon(true); toast("收藏成功");
-}
-function removeFav(token) { saveFavs(getFavs().filter(f => f.token !== token)); }
-
-async function fetchRandom() {
-    const source = sourceIdx >= 0 ? sourceList[sourceIdx] : null;
-    const url = source ? "/api/random?source=" + encodeURIComponent(source) : "/api/random";
-    const res = await fetch(url); if (!res.ok) throw new Error(); return res.json();
-}
-
-async function playNext() {
-    if (loading) return; loading = true; elMsg.textContent = "加载中...";
-    try {
-        const data = await fetchRandom();
-        player.src = "/api/play?token=" + encodeURIComponent(data.token);
-        try { await player.play(); } catch(e) {}
-        elMsg.textContent = "播放中"; elUsername.textContent = "@" + (data.name || "未知");
-        if (historyIdx < history.length - 1) history = history.slice(0, historyIdx + 1);
-        history.push({token: data.token, name: data.name || "未知"});
-        if (history.length > HISTORY_MAX) history.shift();
-        historyIdx = history.length - 1;
-        updateLoveIcon(getFavs().some(f => f.token === data.token));
-    } catch(e) { elMsg.textContent = "加载失败"; }
-    finally { loading = false; }
-}
-
-function playPrev() {
-    if (historyIdx > 0) {
-        historyIdx--; const item = history[historyIdx];
-        player.src = "/api/play?token=" + encodeURIComponent(item.token);
-        player.play().catch(() => {}); elMsg.textContent = "播放中";
-        elUsername.textContent = "@" + item.name;
-        updateLoveIcon(getFavs().some(f => f.token === item.token));
-    } else toast("没有上一个了");
-}
-
-player.addEventListener("ended", () => {
-    if (currentMode === "loop") { player.currentTime = 0; player.play().catch(() => {}); }
-    else playNext();
-});
-player.addEventListener("error", () => { elMsg.textContent = "视频加载失败"; setTimeout(playNext, 1500); });
-
-document.getElementById("btnMode").addEventListener("click", () => {
-    currentMode = currentMode === "loop" ? "play" : "loop";
-    document.getElementById("btnMode").textContent = currentMode === "loop" ? "循环" : "连播";
-    toast(currentMode === "loop" ? "循环模式" : "连播模式");
-});
-document.getElementById("btnPass").addEventListener("click", playNext);
-document.getElementById("btnSource").addEventListener("click", async () => {
-    if (!sourceList.length) await loadSources();
-    sourceIdx++; if (sourceIdx >= sourceList.length) sourceIdx = -1;
-    document.getElementById("btnSource").textContent = sourceIdx === -1 ? "全部" : sourceList[sourceIdx];
-    toast(sourceIdx === -1 ? "全部随机" : sourceList[sourceIdx]); playNext();
-});
-document.getElementById("btnLove").addEventListener("click", () => {
-    if (historyIdx < 0 || historyIdx >= history.length) { toast("暂无视频"); return; }
-    const cur = history[historyIdx];
-    if (getFavs().some(f => f.token === cur.token)) { removeFav(cur.token); updateLoveIcon(false); toast("取消收藏"); }
-    else addFav(cur.token, cur.name);
-});
-
-// Fav panel
-let loveTimer = null;
-document.getElementById("btnLove").addEventListener("touchstart", () => { loveTimer = setTimeout(showFavPanel, 600); });
-document.getElementById("btnLove").addEventListener("touchend", () => clearTimeout(loveTimer));
-document.getElementById("btnLove").addEventListener("touchmove", () => clearTimeout(loveTimer));
-document.getElementById("btnLove").addEventListener("contextmenu", (e) => { e.preventDefault(); showFavPanel(); });
-document.getElementById("favClose").addEventListener("click", () => { document.getElementById("favPanel").classList.remove("open"); });
-
-function showFavPanel() {
-    const favs = getFavs(), list = document.getElementById("favList");
-    if (!favs.length) { list.innerHTML = '<div class="fav-empty">暂无收藏</div>'; }
-    else {
-        list.innerHTML = favs.map(f => '<div class="fav-item" data-token="'+f.token+'">'+f.name+'</div>').join("");
-        list.querySelectorAll(".fav-item").forEach(el => {
-            el.addEventListener("click", () => {
-                player.src = "/api/play?token=" + encodeURIComponent(el.dataset.token);
-                player.play().catch(() => {});
-                document.getElementById("favPanel").classList.remove("open");
-            });
-        });
-    }
-    document.getElementById("favPanel").classList.add("open");
-}
-
-// Touch
-let touchStartX = 0, touchStartY = 0;
-document.addEventListener("touchstart", (e) => { touchStartX = e.touches[0].pageX; touchStartY = e.touches[0].pageY; });
-document.addEventListener("touchend", (e) => {
-    const dx = e.changedTouches[0].pageX - touchStartX, dy = e.changedTouches[0].pageY - touchStartY;
-    if (Math.abs(dx) < 15 && Math.abs(dy) < 15) return;
-    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-    if (angle >= -135 && angle <= -45) playNext();
-    else if (angle > 45 && angle < 135) playPrev();
-    else if ((angle >= 135 && angle <= 180) || (angle >= -180 && angle < -135)) { document.getElementById("texts").style.display = "none"; textVisible = false; }
-    else if (angle >= -45 && angle <= 45) { document.getElementById("texts").style.display = ""; textVisible = true; }
-});
-
-// Click/DblClick
-let clickTimer = null;
-player.addEventListener("click", () => {
-    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; toggleFullScreen(); }
-    else { clickTimer = setTimeout(() => { clickTimer = null; player.paused ? player.play().catch(()=>{}) : player.pause(); }, 250); }
-});
-
-function toggleFullScreen() {
-    if (!document.fullscreenElement) { document.documentElement.requestFullscreen?.() || document.documentElement.webkitRequestFullscreen?.(); }
-    else { document.exitFullscreen?.() || document.webkitExitFullscreen?.(); }
-}
-
-// Keyboard
-document.addEventListener("keydown", (e) => {
-    switch(e.key) {
-        case " ": e.preventDefault(); player.paused ? player.play().catch(()=>{}) : player.pause(); break;
-        case "ArrowUp": case "n": playNext(); break;
-        case "ArrowDown": case "p": playPrev(); break;
-        case "f": toggleFullScreen(); break;
-        case "s": document.getElementById("btnSource").click(); break;
-        case "m": document.getElementById("btnMode").click(); break;
-    }
-});
-
-async function loadSources() { try { const res = await fetch("/api/sources"); const data = await res.json(); sourceList = data.sources || []; } catch(e) {} }
-(async () => { await loadSources(); playNext(); })();
-</script>
+(function(){
+var m=/Android|iPhone|iPod|iPad|Mobile|UCWEB/i.test(navigator.userAgent);
+document.body.className=m?"mobile":"pc";
+if(!m)document.getElementById("player").removeAttribute("x5-video-player-type");
+var M="loop",Si=-1,SL=[],H=[],Hi=-1,L=!1,P=document.getElementById("player"),G=document.getElementById("msg"),U=document.getElementById("username"),$=function(i){return document.getElementById(i)};
+setInterval(function(){var c=new Date;$("time").textContent=[c.getHours(),c.getMinutes(),c.getSeconds()].map(function(n){return String(n).padStart(2,"0")}).join(":");},1e3);
+setTimeout(function(){var a=$("hints");a&&a.classList.add("hidden");},1e4);
+function T(a){var b=document.createElement("div");b.className="toast";b.textContent=a;document.body.appendChild(b);setTimeout(function(){b.remove();},1600)}
+function GF(){try{return JSON.parse(localStorage.getItem("djj_favs")||"[]")}catch(e){return[]}}
+function SF(f){localStorage.setItem("djj_favs",JSON.stringify(f))}
+function UL(a){var s=a?"/img/loves.png":"/img/love.png";document.querySelectorAll("#btnLove,#btnLoveM").forEach(function(e){if(e)e.src=s})}
+function AF(t,n){var f=GF();if(f.some(function(x){return x.token===t})){T("已收藏");return}f.unshift({token:t,name:n,ts:Date.now()});SF(f);UL(true);T("收藏成功")}
+function RF(t){SF(GF().filter(function(x){return x.token!==t}))}
+async function FR(){var s=Si>=0?SL[Si]:null,u=s?"/api/random?source="+encodeURIComponent(s):"/api/random",r=await fetch(u);if(!r.ok)throw new Error();return r.json()}
+async function PN(){if(L)return;L=true;G&&(G.textContent="加载中...");try{var d=await FR();P.src="/api/play?token="+encodeURIComponent(d.token);try{await P.play()}catch(e){}G&&(G.textContent="播放中");U&&(U.textContent="@"+(d.name||"未知"));if(Hi<H.length-1)H=H.slice(0,Hi+1);H.push({token:d.token,name:d.name||"未知"});H.length>50&&H.shift();Hi=H.length-1;UL(GF().some(function(x){return x.token===d.token}));SB()}catch(e){G&&(G.textContent="加载失败");T("加载失败")}finally{L=false}}
+function PP(){if(Hi>0){Hi--;var a=H[Hi];P.src="/api/play?token="+encodeURIComponent(a.token);P.play().catch(function(){});G&&(G.textContent="播放中");U&&(U.textContent="@"+a.name);UL(GF().some(function(x){return x.token===a.token}))}else T("没了")}
+function SB(){var a=document.querySelectorAll("#btnMode,#btnModeM");a.forEach(function(e){e&&(e.textContent=M==="loop"?(m?"循环":"单视频循环播放"):(m?"连播":"连续播放模式"))});var c=document.querySelectorAll("#btnSource,#btnSourceM");c.forEach(function(e){e&&(e.textContent=Si===-1?(m?"全部":"换源【全部】"):(m?SL[Si]:"换源【"+SL[Si]+"】"))})}
+P.addEventListener("ended",function(){M==="loop"?(P.currentTime=0,P.play().catch(function(){})):PN()});
+P.addEventListener("error",function(){G&&(G.textContent="视频加载失败");setTimeout(PN,1500)});
+function TM(){M=M==="loop"?"play":"loop";SB();T(M==="loop"?"循环":"连播")}
+function TS(){SL.length||(LS().then(TS));Si++;Si>=SL.length&&(Si=-1);SB();T(Si===-1?"全部":SL[Si]);PN()}
+function TL(){if(Hi<0||Hi>=H.length){T("暂无视频");return}var a=H[Hi];GF().some(function(x){return x.token===a.token})?(RF(a.token),UL(false),T("取消收藏")):AF(a.token,a.name)}
+function FP(){var f=GF(),l=$("favList");if(!f.length){l.innerHTML='<div class="fav-empty">暂无收藏</div>'}else{l.innerHTML=f.map(function(x){return'<div class="fav-item" data-token="'+x.token+'">'+x.name+"</div>"}).join("");l.querySelectorAll(".fav-item").forEach(function(e){e.addEventListener("click",function(){P.src="/api/play?token="+encodeURIComponent(e.dataset.token);P.play().catch(function(){});$("favPanel").classList.remove("open")})})}$("favPanel").classList.add("open")}
+$("btnMode").addEventListener("click",TM);$("btnPass").addEventListener("click",PN);$("btnSource").addEventListener("click",TS);$("btnLove").addEventListener("click",TL);
+if($("btnFav"))$("btnFav").addEventListener("click",FP);
+if($("btnModeM"))$("btnModeM").addEventListener("click",TM);if($("btnPassM"))$("btnPassM").addEventListener("click",PN);
+if($("btnSourceM"))$("btnSourceM").addEventListener("click",TS);if($("btnLoveM"))$("btnLoveM").addEventListener("click",TL);
+$("favClose").addEventListener("click",function(){$("favPanel").classList.remove("open")});
+(function(){var a=null,b=$("btnLoveM");b&&(b.addEventListener("touchstart",function(){a=setTimeout(FP,600)}),b.addEventListener("touchend",function(){clearTimeout(a)}),b.addEventListener("touchmove",function(){clearTimeout(a)}),b.addEventListener("contextmenu",function(e){e.preventDefault();FP()}))})();
+if(m){(function(){var a=0,b=0;document.addEventListener("touchstart",function(e){a=e.touches[0].pageX;b=e.touches[0].pageY});document.addEventListener("touchend",function(e){var d=e.changedTouches[0].pageX-a,y=e.changedTouches[0].pageY-b,an=Math.atan2(y,d)*180/Math.PI;Math.abs(d)<15&&Math.abs(y)<15||(an>=-135&&an<=-45?PN():an>45&&an<135?PP():(an>=135&&an<=180||an>=-180&&an<-135)?$("texts").style.display="none":an>=-45&&an<=45&&($("texts").style.display=""))})})();
+(function(){var a=null;P.addEventListener("click",function(){a?(clearTimeout(a),a=null,FS()):a=setTimeout(function(){a=null;P.paused?P.play().catch(function(){}):P.pause()},250)})})()}
+function FS(){document.fullscreenElement?(document.exitFullscreen||document.webkitExitFullscreen||function(){})():((document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen||function(){}).call(document.documentElement))}
+document.addEventListener("keydown",function(e){switch(e.key){case" ":e.preventDefault();P.paused?P.play().catch(function(){}):P.pause();break;case"ArrowUp":case"n":PN();break;case"ArrowDown":case"p":PP();break;case"f":FS();break;case"s":TS();break;case"m":TM()}});
+async function LS(){try{var r=await fetch("/api/sources"),d=await r.json();SL=d.sources||[]}catch(e){}}
+(async function(){await LS();PN()})();
+})();</script>
 </body>
 </html>
