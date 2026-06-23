@@ -118,3 +118,4 @@ if (WEB_DIR / "css").exists():
     app.mount("/css", StaticFiles(directory=str(WEB_DIR / "css")), name="css")
 if (WEB_DIR / "img").exists():
     app.mount("/img", StaticFiles(directory=str(WEB_DIR / "img")), name="img")
+
