@@ -21,7 +21,7 @@ docker run -d --name djj -p 8080:8080 \
   lzylipu/djj:latest
 ```
 
-Open `http://localhost:8080` - works on both phone and desktop. No `/pc` path needed.
+Open `http://localhost:8080` - works on both phone and desktop. No `/pc` path needed, UI adapts automatically. No `/pc` path needed.
 
 ## Add Video Sources
 
