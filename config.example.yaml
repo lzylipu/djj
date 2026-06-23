@@ -1,22 +1,11 @@
-# DJJ 配置文件
-# ============
-# 容器首次启动会在 /data/config.yaml 自动生成此文件
-# 修改后重启容器生效: docker restart djj
-
 server:
   port: 8080
-  secret: change-me-to-random
+  secret: change-me-to-random-string
 
+# 视频源: 源名: 路径或URL
+# /开头 = 本地目录(自动识别), http开头 = 远程API(自动识别)
 sources:
-  - name: 舞蹈
-    type: local
-    path: /videos/舞蹈
-  - name: 搞笑
-    type: local
-    path: /videos/搞笑
-  - name: 风景
-    type: local
-    path: /videos/风景
-  # - name: 在线热舞
-  #   type: remote
-  #   url: https://api.example.com/random
+  默认: /videos
+  # 舞蹈: /videos/舞蹈
+  # 搞笑: /videos/搞笑
+  # 远程示例: https://example.com/api/random
