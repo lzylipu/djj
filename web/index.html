@@ -182,6 +182,7 @@ function updUI(){
 }
 function toggleMode(){M=M==='loop'?'play':'loop';updUI();toast(M==='loop'?'循环模式':'连播模式')}
 function toggleSource(){SL.length||loadSources().then(toggleSource);Si++;if(Si>=SL.length)Si=-1;updUI();toast(Si===-1?'全部':SL[Si]);playNext()}
+function toggleSourceBack(){SL.length||loadSources().then(toggleSourceBack);Si--;if(Si<-1)Si=SL.length-1;updUI();toast(Si===-1?'全部':SL[Si]);playNext()}
 function toggleLove(){if(Hi<0||Hi>=H.length){toast('暂无');return}var a=H[Hi];if(GF().some(function(x){return x.token===a.token})){rmFav(a.token);updLoveUI(false);toast('取消收藏')}else addFav(a.token,a.name)}
 function showFav(){
   var f=GF(),el=document.getElementById('favList');
@@ -253,11 +254,13 @@ function toggleFS(){
 /* PC keyboard */
 if(!isM){document.addEventListener('keydown',function(e){
   switch(e.key){
-    case ' ':e.preventDefault();player.paused?player.play().catch(function(){}):player.pause();break;
-    case 'ArrowUp':case 'n':case 'N':playNext();break;
-    case 'ArrowDown':case 'p':case 'P':playPrev();break;
+    case ' ':case 'k':e.preventDefault();player.paused?player.play().catch(function(){}):player.pause();break;
+    case 'ArrowLeft':playPrev();break;
+    case 'ArrowRight':playNext();break;
+    case 'ArrowUp':toggleSourceBack();break;
+    case 'ArrowDown':toggleSource();break;
     case 'f':case 'F':toggleFS();break;
-    case 's':case 'S':toggleSource();break;
+    case 'v':case 'V':soundOn?mute():unmute();break;
     case 'm':case 'M':toggleMode();break
   }
 })}
