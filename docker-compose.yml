@@ -7,10 +7,11 @@ services:
       - "8080:8080"
     volumes:
       - djj-data:/data
-      # - /your/videos/dance:/videos/dance:ro
+      # 视频目录挂载(只读)
+      # - /path/to/videos:/videos/name:ro
     environment:
       - PORT=8080
-      # - API_SECRET=your-secret
+      # 密钥环境变量见.env.example
     restart: unless-stopped
 
 volumes:
