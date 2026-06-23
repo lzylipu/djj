@@ -9,10 +9,15 @@ _DEFAULT_YAML = """server:
   port: 8080
   secret: change-me-to-random-string
 
+# 视频源: 源名: 路径或URL
+# / 开头 = 本地目录(自动识别)
+# http 开头 = 远程API(自动识别)
+# 注意: 源名不要用 # 开头，否则会被当成注释
 sources:
   默认: /videos
   # 舞蹈: /videos/舞蹈
-  # 远程: https://example.com/api/random
+  # 搞笑: /videos/搞笑
+  # 远程示例: https://example.com/api/random
 """
 
 def _detect_type(value):
@@ -35,9 +40,17 @@ def _load():
         raw = yaml.safe_load(f) or {}
     server = raw.get("server", {})
     sources_raw = raw.get("sources", {})
+
+    # 修复: sources全注释时yaml返回None，导致零源识别
+    if sources_raw is None:
+        sources_raw = {}
+
     sources = []
     if isinstance(sources_raw, dict):
         for name, value in sources_raw.items():
+            # 跳过空的或注释键
+            if not name or not str(value).strip():
+                continue
             stype, sval = _detect_type(value)
             entry = {"name": name, "type": stype}
             if stype == "remote":
@@ -47,6 +60,7 @@ def _load():
             sources.append(entry)
     elif isinstance(sources_raw, list):
         sources = sources_raw
+
     return {
         "port": int(os.getenv("PORT", server.get("port", 8080))),
         "api_secret": os.getenv(_SKEY, server.get("secret", "djj-default-secret-change-me")),

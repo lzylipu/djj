@@ -3,9 +3,14 @@ server:
   secret: change-me-to-random-string
 
 # 视频源: 源名: 路径或URL
-# /开头 = 本地目录(自动识别), http开头 = 远程API(自动识别)
+# / 开头 = 本地目录(自动识别)
+# http 开头 = 远程API(自动识别)
+# 提示: 远程API需返回JSON，包含 video_url 或 url 或 data.url 字段
 sources:
   默认: /videos
   # 舞蹈: /videos/舞蹈
   # 搞笑: /videos/搞笑
-  # 远程示例: https://example.com/api/random
+  # --- 远程API ---
+  小姐姐: https://tmini.net/api/meinv?mp4=json&r=
+  # 绅士视频: https://tmini.net/api/meinv?_t=0.
+  # 更多API可自行添加，格式: 源名: https://api.example.com/random

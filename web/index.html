@@ -9,72 +9,336 @@
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-<div class="app" ontouchmove="return false;">
-    <video id="player" autoplay preload muted playsinline controlslist="nodownload"
+
+<!-- ===== 移动端 ===== -->
+<div class="mobile-layout" id="mobileLayout">
+  <div class="video-wrap">
+    <video id="playerM" autoplay preload playsinline controlslist="nodownload"
            x5-video-player-type="h5" x5-video-player-fullscreen="true"
            x5-video-ignore-metadata="true" poster="/img/bg.gif"></video>
-    <div class="sidebar" id="sidebar">
-        <h3>随机视频</h3>
-        <div class="hint">Space 暂停 | N 下一个 | P 上一个 | F 全屏 | S 换源 | M 模式</div>
-        <div class="hint source-label">点击换源切换数据源</div>
-        <div class="hint love-label">点击爱心收藏</div>
-        <button class="ctrl-btn mode-btn" id="btnMode">循环</button>
-        <button class="ctrl-btn pass-btn" id="btnPass">PASS</button>
-        <img class="love-btn" id="btnLove" src="/img/love.png" alt="love">
-        <button class="ctrl-btn source-btn" id="btnSource">换源</button>
-        <button class="ctrl-btn fav-btn" id="btnFav">收藏</button>
-        <div class="disclaimer-pc">仅供学习研究，视频采集自网络</div>
+    <div class="video-info" id="textsM">
+      <span class="vid-name" id="vidNameM">@DJJ</span>
+      <span class="vid-status" id="vidStatusM">加载中...</span>
     </div>
+    <div class="mobile-controls" id="mobileCtrl">
+      <button class="mc-btn" id="btnModeM" title="模式">循环</button>
+      <button class="mc-btn mc-btn-accent" id="btnPassM" title="下一个">PASS</button>
+      <button class="mc-btn" id="btnSourceM" title="换源">全部</button>
+      <img class="mc-love" id="btnLoveM" src="/img/love.png" alt="❤">
+    </div>
+    <div class="mobile-clock" id="clockM">00:00:00</div>
+    <div class="mobile-hints" id="hintsM">
+      <span>上滑 下一个</span><span>下滑 上一个</span>
+      <span>左右滑 显隐文字</span><span>点触 暂停/播放</span>
+      <span>双击 全屏</span>
+    </div>
+  </div>
 </div>
-<div id="texts">
-    <span class="username" id="username">@DJJ</span>
-    <div class="disclaimer">仅供学习研究，视频采集自网络<br><span class="msg" id="msg">加载中...</span></div>
+
+<!-- ===== PC端 ===== -->
+<div class="pc-layout" id="pcLayout">
+  <main class="pc-video-area">
+    <video id="playerPC" autoplay preload playsinline controlslist="nodownload"
+           poster="/img/bg.gif"></video>
+    <div class="pc-video-overlay" id="vidOverlayPC">
+      <span class="pc-vid-name" id="vidNamePC">@DJJ</span>
+      <span class="pc-vid-status" id="vidStatusPC">加载中...</span>
+    </div>
+  </main>
+  <aside class="pc-sidebar">
+    <div class="pc-logo">
+      <h1>DJJ</h1>
+      <span>随机视频</span>
+    </div>
+    <div class="pc-section">
+      <div class="pc-section-title">控制</div>
+      <button class="pc-btn pc-btn-pass" id="btnPassPC">▶ 下一个</button>
+      <button class="pc-btn pc-btn-mode" id="btnModePC">🔁 单视频循环</button>
+      <button class="pc-btn pc-btn-source" id="btnSourcePC">📡 换源【全部】</button>
+    </div>
+    <div class="pc-section">
+      <div class="pc-section-title">收藏</div>
+      <button class="pc-btn pc-btn-love" id="btnLovePC">♡ 收藏</button>
+      <button class="pc-btn pc-btn-fav" id="btnFavPC">📋 查看收藏</button>
+    </div>
+    <div class="pc-section">
+      <div class="pc-section-title">快捷键</div>
+      <div class="pc-keys">
+        <kbd>Space</kbd> 暂停/播放<br>
+        <kbd>N</kbd> / <kbd>↑</kbd> 下一个<br>
+        <kbd>P</kbd> / <kbd>↓</kbd> 上一个<br>
+        <kbd>F</kbd> 全屏<br>
+        <kbd>S</kbd> 换源<br>
+        <kbd>M</kbd> 切换模式<br>
+        <kbd>V</kbd> 开关声音
+      </div>
+    </div>
+    <div class="pc-disclaimer">仅供学习研究 · 视频采集自网络</div>
+  </aside>
 </div>
-<span id="time">00:00:00</span>
-<div id="hints"><div>上滑-下一个</div><div>下滑-上一个</div><div>左右滑-显隐文字</div><div>单击-暂停</div><div>双击-全屏</div></div>
-<div id="controls">
-    <button class="btn-mode" id="btnModeM">循环</button>
-    <button class="btn-source" id="btnSourceM">换源</button>
-    <button class="btn-pass" id="btnPassM">PASS</button>
-    <img class="btn-love" id="btnLoveM" src="/img/love.png" alt="love">
+
+<!-- 收藏面板 -->
+<div class="fav-panel" id="favPanel">
+  <div class="fav-header">收藏列表<button class="fav-close" id="favClose">✕</button></div>
+  <div id="favList"></div>
 </div>
-<div class="fav-panel" id="favPanel"><div class="fav-header">收藏</div><button class="fav-close" id="favClose">X</button><div id="favList"></div></div>
+
+<!-- 声音提示（PC端悬浮） -->
+<div class="sound-hint" id="soundHint">🔇 点击页面或按 V 开启声音</div>
+
 <script>
 (function(){
-var m=/Android|iPhone|iPod|iPad|Mobile|UCWEB/i.test(navigator.userAgent);
-document.body.className=m?"mobile":"pc";
-if(!m)document.getElementById("player").removeAttribute("x5-video-player-type");
-var M="loop",Si=-1,SL=[],H=[],Hi=-1,L=!1,P=document.getElementById("player"),G=document.getElementById("msg"),U=document.getElementById("username"),$=function(i){return document.getElementById(i)};
-setInterval(function(){var c=new Date;$("time").textContent=[c.getHours(),c.getMinutes(),c.getSeconds()].map(function(n){return String(n).padStart(2,"0")}).join(":");},1e3);
-setTimeout(function(){var a=$("hints");a&&a.classList.add("hidden");},1e4);
-function T(a){var b=document.createElement("div");b.className="toast";b.textContent=a;document.body.appendChild(b);setTimeout(function(){b.remove();},1600)}
-function GF(){try{return JSON.parse(localStorage.getItem("djj_favs")||"[]")}catch(e){return[]}}
-function SF(f){localStorage.setItem("djj_favs",JSON.stringify(f))}
-function UL(a){var s=a?"/img/loves.png":"/img/love.png";document.querySelectorAll("#btnLove,#btnLoveM").forEach(function(e){if(e)e.src=s})}
-function AF(t,n){var f=GF();if(f.some(function(x){return x.token===t})){T("已收藏");return}f.unshift({token:t,name:n,ts:Date.now()});SF(f);UL(true);T("收藏成功")}
-function RF(t){SF(GF().filter(function(x){return x.token!==t}))}
-async function FR(){var s=Si>=0?SL[Si]:null,u=s?"/api/random?source="+encodeURIComponent(s):"/api/random",r=await fetch(u);if(!r.ok)throw new Error();return r.json()}
-async function PN(){if(L)return;L=true;G&&(G.textContent="加载中...");try{var d=await FR();P.src="/api/play?token="+encodeURIComponent(d.token);try{await P.play()}catch(e){}G&&(G.textContent="播放中");U&&(U.textContent="@"+(d.name||"未知"));if(Hi<H.length-1)H=H.slice(0,Hi+1);H.push({token:d.token,name:d.name||"未知"});H.length>50&&H.shift();Hi=H.length-1;UL(GF().some(function(x){return x.token===d.token}));SB()}catch(e){G&&(G.textContent="加载失败");T("加载失败")}finally{L=false}}
-function PP(){if(Hi>0){Hi--;var a=H[Hi];P.src="/api/play?token="+encodeURIComponent(a.token);P.play().catch(function(){});G&&(G.textContent="播放中");U&&(U.textContent="@"+a.name);UL(GF().some(function(x){return x.token===a.token}))}else T("没了")}
-function SB(){var a=document.querySelectorAll("#btnMode,#btnModeM");a.forEach(function(e){e&&(e.textContent=M==="loop"?(m?"循环":"单视频循环播放"):(m?"连播":"连续播放模式"))});var c=document.querySelectorAll("#btnSource,#btnSourceM");c.forEach(function(e){e&&(e.textContent=Si===-1?(m?"全部":"换源【全部】"):(m?SL[Si]:"换源【"+SL[Si]+"】"))})}
-P.addEventListener("ended",function(){M==="loop"?(P.currentTime=0,P.play().catch(function(){})):PN()});
-P.addEventListener("error",function(){G&&(G.textContent="视频加载失败");setTimeout(PN,1500)});
-function TM(){M=M==="loop"?"play":"loop";SB();T(M==="loop"?"循环":"连播")}
-function TS(){SL.length||(LS().then(TS));Si++;Si>=SL.length&&(Si=-1);SB();T(Si===-1?"全部":SL[Si]);PN()}
-function TL(){if(Hi<0||Hi>=H.length){T("暂无视频");return}var a=H[Hi];GF().some(function(x){return x.token===a.token})?(RF(a.token),UL(false),T("取消收藏")):AF(a.token,a.name)}
-function FP(){var f=GF(),l=$("favList");if(!f.length){l.innerHTML='<div class="fav-empty">暂无收藏</div>'}else{l.innerHTML=f.map(function(x){return'<div class="fav-item" data-token="'+x.token+'">'+x.name+"</div>"}).join("");l.querySelectorAll(".fav-item").forEach(function(e){e.addEventListener("click",function(){P.src="/api/play?token="+encodeURIComponent(e.dataset.token);P.play().catch(function(){});$("favPanel").classList.remove("open")})})}$("favPanel").classList.add("open")}
-$("btnMode").addEventListener("click",TM);$("btnPass").addEventListener("click",PN);$("btnSource").addEventListener("click",TS);$("btnLove").addEventListener("click",TL);
-if($("btnFav"))$("btnFav").addEventListener("click",FP);
-if($("btnModeM"))$("btnModeM").addEventListener("click",TM);if($("btnPassM"))$("btnPassM").addEventListener("click",PN);
-if($("btnSourceM"))$("btnSourceM").addEventListener("click",TS);if($("btnLoveM"))$("btnLoveM").addEventListener("click",TL);
-$("favClose").addEventListener("click",function(){$("favPanel").classList.remove("open")});
-(function(){var a=null,b=$("btnLoveM");b&&(b.addEventListener("touchstart",function(){a=setTimeout(FP,600)}),b.addEventListener("touchend",function(){clearTimeout(a)}),b.addEventListener("touchmove",function(){clearTimeout(a)}),b.addEventListener("contextmenu",function(e){e.preventDefault();FP()}))})();
-if(m){(function(){var a=0,b=0;document.addEventListener("touchstart",function(e){a=e.touches[0].pageX;b=e.touches[0].pageY});document.addEventListener("touchend",function(e){var d=e.changedTouches[0].pageX-a,y=e.changedTouches[0].pageY-b,an=Math.atan2(y,d)*180/Math.PI;Math.abs(d)<15&&Math.abs(y)<15||(an>=-135&&an<=-45?PN():an>45&&an<135?PP():(an>=135&&an<=180||an>=-180&&an<-135)?$("texts").style.display="none":an>=-45&&an<=45&&($("texts").style.display=""))})})();
-(function(){var a=null;P.addEventListener("click",function(){a?(clearTimeout(a),a=null,FS()):a=setTimeout(function(){a=null;P.paused?P.play().catch(function(){}):P.pause()},250)})})()}
-function FS(){document.fullscreenElement?(document.exitFullscreen||document.webkitExitFullscreen||function(){})():((document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen||function(){}).call(document.documentElement))}
-document.addEventListener("keydown",function(e){switch(e.key){case" ":e.preventDefault();P.paused?P.play().catch(function(){}):P.pause();break;case"ArrowUp":case"n":PN();break;case"ArrowDown":case"p":PP();break;case"f":FS();break;case"s":TS();break;case"m":TM()}});
-async function LS(){try{var r=await fetch("/api/sources"),d=await r.json();SL=d.sources||[]}catch(e){}}
-(async function(){await LS();PN()})();
-})();</script>
+var isMobile = /Android|iPhone|iPod|iPad|Mobile|UCWEB/i.test(navigator.userAgent);
+var mobileEl = document.getElementById('mobileLayout');
+var pcEl = document.getElementById('pcLayout');
+if(isMobile){ pcEl.style.display='none'; } else { mobileEl.style.display='none'; }
+
+var player = isMobile ? document.getElementById('playerM') : document.getElementById('playerPC');
+var vidName = isMobile ? document.getElementById('vidNameM') : document.getElementById('vidNamePC');
+var vidStatus = isMobile ? document.getElementById('vidStatusM') : document.getElementById('vidStatusPC');
+var M="loop", Si=-1, SL=[], H=[], Hi=-1, L=false;
+
+/* ===== 时钟 ===== */
+function tick(){
+  var c=new Date();
+  var s=[c.getHours(),c.getMinutes(),c.getSeconds()].map(function(n){return String(n).padStart(2,'0')}).join(':');
+  var elM=document.getElementById('clockM');
+  if(elM) elM.textContent=s;
+}
+setInterval(tick,1e3); tick();
+
+/* ===== 提示 ===== */
+function hintFade(){
+  var h=document.getElementById('hintsM');
+  if(h) h.classList.add('hidden');
+}
+setTimeout(hintFade,6e3);
+
+function toast(a){
+  var b=document.createElement('div');b.className='toast';b.textContent=a;
+  document.body.appendChild(b);setTimeout(function(){b.remove()},1600);
+}
+
+/* ===== 声音控制 ===== */
+var mutedByAutoplay = true;
+player.muted = true; // 初始静音保证自动播放
+var soundHint = document.getElementById('soundHint');
+
+function unmute(){
+  player.muted = false;
+  mutedByAutoplay = false;
+  if(soundHint) soundHint.style.display='none';
+}
+
+// 任意交互即开声
+document.addEventListener('click', unmute, {once:false});
+document.addEventListener('keydown', function(e){
+  if(e.key==='v'||e.key==='V'){
+    if(player.muted){ unmute(); } else { player.muted=true; mutedByAutoplay=true; if(soundHint)soundHint.style.display='block'; }
+    e.preventDefault();
+  }
+}, false);
+
+// 自动播放成功后尝试开声
+player.addEventListener('playing', function(){
+  setTimeout(function(){
+    if(mutedByAutoplay){
+      player.muted=false;
+      unmute();
+    }
+  }, 300);
+});
+
+/* ===== 收藏 ===== */
+function GF(){ try{return JSON.parse(localStorage.getItem('djj_favs')||'[]')}catch(e){return[]} }
+function SF(f){ localStorage.setItem('djj_favs',JSON.stringify(f)) }
+
+function updateLoveUI(isLoved){
+  var src = isLoved ? '/img/loves.png' : '/img/love.png';
+  ['btnLoveM','btnLovePC'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.src=src;
+  });
+  var btnLP = document.getElementById('btnLovePC');
+  if(btnLP) btnLP.textContent = isLoved ? '❤ 已收藏' : '♡ 收藏';
+}
+
+function addFav(t,n){
+  var f=GF(); if(f.some(function(x){return x.token===t})){toast('已收藏');return}
+  f.unshift({token:t,name:n,ts:Date.now()}); SF(f); updateLoveUI(true); toast('收藏成功');
+}
+function rmFav(t){ SF(GF().filter(function(x){return x.token!==t})) }
+
+/* ===== 核心：加载/播放 ===== */
+async function fetchRandom(){
+  var s=Si>=0?SL[Si]:null, u=s?'/api/random?source='+encodeURIComponent(s):'/api/random';
+  var r=await fetch(u); if(!r.ok) throw new Error(); return r.json();
+}
+
+async function playNext(){
+  if(L) return; L=true;
+  if(vidStatus) vidStatus.textContent='加载中...';
+  try{
+    var d=await fetchRandom();
+    player.src='/api/play?token='+encodeURIComponent(d.token);
+    try{ await player.play() }catch(e){}
+    // 尝试取消静音
+    if(mutedByAutoplay){
+      player.muted=false; unmute();
+    }
+    if(vidStatus) vidStatus.textContent='▶ 播放中';
+    if(vidName) vidName.textContent='@'+(d.name||'未知');
+    if(Hi<H.length-1) H=H.slice(0,Hi+1);
+    H.push({token:d.token,name:d.name||'未知'});
+    if(H.length>50) H.shift();
+    Hi=H.length-1;
+    updateLoveUI(GF().some(function(x){return x.token===d.token}));
+    updateModeUI();
+  }catch(e){
+    if(vidStatus) vidStatus.textContent='加载失败';
+    toast('加载失败');
+  }finally{ L=false }
+}
+
+function playPrev(){
+  if(Hi>0){ Hi--; var a=H[Hi];
+    player.src='/api/play?token='+encodeURIComponent(a.token);
+    player.play().catch(function(){});
+    if(vidStatus) vidStatus.textContent='▶ 播放中';
+    if(vidName) vidName.textContent='@'+a.name;
+    updateLoveUI(GF().some(function(x){return x.token===a.token}));
+  } else toast('没了');
+}
+
+/* ===== 模式/源 UI ===== */
+function updateModeUI(){
+  var modeText = M==='loop' ? (isMobile?'循环':'🔁 单视频循环') : (isMobile?'连播':'▶ 连续播放');
+  ['btnModeM','btnModePC'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.textContent=modeText;
+  });
+  var srcText = Si===-1 ? (isMobile?'全部':'📡 换源【全部】') : (isMobile?SL[Si]:'📡 换源【'+SL[Si]+'】');
+  ['btnSourceM','btnSourcePC'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.textContent=srcText;
+  });
+}
+
+function toggleMode(){ M=M==='loop'?'play':'loop'; updateModeUI(); toast(M==='loop'?'循环':'连播') }
+function toggleSource(){
+  SL.length || loadSources().then(toggleSource);
+  Si++; if(Si>=SL.length) Si=-1;
+  updateModeUI(); toast(Si===-1?'全部':SL[Si]); playNext();
+}
+function toggleLove(){
+  if(Hi<0||Hi>=H.length){toast('暂无视频');return}
+  var a=H[Hi];
+  if(GF().some(function(x){return x.token===a.token})){
+    rmFav(a.token); updateLoveUI(false); toast('取消收藏');
+  } else { addFav(a.token,a.name) }
+}
+function showFav(){
+  var f=GF(), el=document.getElementById('favList');
+  if(!f.length){ el.innerHTML='<div class="fav-empty">暂无收藏</div>' }
+  else{
+    el.innerHTML=f.map(function(x){return '<div class="fav-item" data-token="'+x.token+'">'+x.name+'</div>'}).join('');
+    el.querySelectorAll('.fav-item').forEach(function(e){
+      e.addEventListener('click',function(){
+        player.src='/api/play?token='+encodeURIComponent(e.dataset.token);
+        player.play().catch(function(){});
+        document.getElementById('favPanel').classList.remove('open');
+      });
+    });
+  }
+  document.getElementById('favPanel').classList.add('open');
+}
+
+/* ===== 事件绑定 ===== */
+player.addEventListener('ended', function(){
+  if(M==='loop'){player.currentTime=0;player.play().catch(function(){})}else{playNext()}
+});
+player.addEventListener('error', function(){
+  if(vidStatus) vidStatus.textContent='视频加载失败';
+  setTimeout(playNext,1500);
+});
+
+// 统一绑定（兼容mobile和PC两套按钮）
+['btnModeM','btnModePC'].forEach(function(id){
+  var el=document.getElementById(id); if(el) el.addEventListener('click',toggleMode);
+});
+['btnPassM','btnPassPC'].forEach(function(id){
+  var el=document.getElementById(id); if(el) el.addEventListener('click',playNext);
+});
+['btnSourceM','btnSourcePC'].forEach(function(id){
+  var el=document.getElementById(id); if(el) el.addEventListener('click',toggleSource);
+});
+['btnLoveM','btnLovePC'].forEach(function(id){
+  var el=document.getElementById(id); if(el) el.addEventListener('click',toggleLove);
+});
+var favBtn=document.getElementById('btnFavPC'); if(favBtn) favBtn.addEventListener('click',showFav);
+var favClose=document.getElementById('favClose'); if(favClose) favClose.addEventListener('click',function(){document.getElementById('favPanel').classList.remove('open')});
+
+/* ===== 长按爱心=收藏面板（移动端） ===== */
+(function(){
+  var a=null, b=document.getElementById('btnLoveM');
+  if(b){
+    b.addEventListener('touchstart',function(){a=setTimeout(showFav,600)});
+    b.addEventListener('touchend',function(){clearTimeout(a)});
+    b.addEventListener('touchmove',function(){clearTimeout(a)});
+    b.addEventListener('contextmenu',function(e){e.preventDefault();showFav()});
+  }
+})();
+
+/* ===== 移动端手势 ===== */
+if(isMobile){
+  (function(){
+    var ax=0,ay=0;
+    document.addEventListener('touchstart',function(e){ax=e.touches[0].pageX;ay=e.touches[0].pageY});
+    document.addEventListener('touchend',function(e){
+      var dx=e.changedTouches[0].pageX-ax, dy=e.changedTouches[0].pageY-ay;
+      var ang=Math.atan2(dy,dx)*180/Math.PI;
+      if(Math.abs(dx)<15 && Math.abs(dy)<15) return;
+      if(ang>=-135 && ang<=-45) playNext();
+      else if(ang>45 && ang<135) playPrev();
+      else if(ang>=135||ang<-135) document.getElementById('textsM').style.display='none';
+      else if(ang>=-45 && ang<=45) document.getElementById('textsM').style.display='';
+    });
+  })();
+  // 单击暂停 / 双击全屏
+  (function(){
+    var a=null;
+    player.addEventListener('click',function(){
+      if(a){clearTimeout(a);a=null;toggleFS()} 
+      else{a=setTimeout(function(){a=null;player.paused?player.play().catch(function(){}):player.pause()},250)}
+    });
+  })();
+}
+
+/* ===== 全屏 ===== */
+function toggleFS(){
+  if(document.fullscreenElement) (document.exitFullscreen||function(){})()
+  else (document.documentElement.requestFullscreen||function(){}).call(document.documentElement);
+}
+
+/* ===== PC键盘 ===== */
+if(!isMobile){
+  document.addEventListener('keydown',function(e){
+    switch(e.key){
+      case ' ': e.preventDefault(); player.paused?player.play().catch(function(){}):player.pause(); break;
+      case 'ArrowUp': case 'n': case 'N': playNext(); break;
+      case 'ArrowDown': case 'p': case 'P': playPrev(); break;
+      case 'f': case 'F': toggleFS(); break;
+      case 's': case 'S': toggleSource(); break;
+      case 'm': case 'M': toggleMode(); break;
+    }
+  });
+}
+
+/* ===== 源列表 ===== */
+async function loadSources(){
+  try{ var r=await fetch('/api/sources'), d=await r.json(); SL=d.sources||[] }catch(e){}
+}
+
+/* ===== 启动 ===== */
+(async function(){ await loadSources(); playNext() })();
+})();
+</script>
 </body>
 </html>
