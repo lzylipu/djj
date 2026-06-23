@@ -6,8 +6,8 @@ Random video player with TikTok-like mobile UI and desktop sidebar. Self-hosted,
 
 ## Features
 
-- **Adaptive UI**: Mobile (swipe gestures) or PC (keyboard + sidebar), auto-detected
-- **Simplified config**: Just `source_name: /path` or `source_name: https://...`
+- **Adaptive UI**: Single page auto-detects mobile/PC. Mobile gets swipe gestures, PC gets keyboard + sidebar
+- **Simplified config**: `source_name: /path` or `source_name: https://url`, auto-detect type
 - **Local + Remote**: Mount local video dirs or connect to remote APIs
 - **Privacy**: HMAC-signed tokens, no public file paths exposed
 - **Docker one-click**: Config auto-generated on first run
@@ -15,10 +15,13 @@ Random video player with TikTok-like mobile UI and desktop sidebar. Self-hosted,
 ## Quick Start
 
 ```bash
-docker run -d --name djj -p 8080:8080   -v djj-data:/data   -v /your/videos:/videos:ro   lzylipu/djj:latest
+docker run -d --name djj -p 8080:8080 \
+  -v djj-data:/data \
+  -v /your/videos:/videos:ro \
+  lzylipu/djj:latest
 ```
 
-Open `http://localhost:8080` - done. Config auto-generated at `/data/config.yaml`.
+Open `http://localhost:8080` - works on both phone and desktop. No `/pc` path needed.
 
 ## Add Video Sources
 
@@ -29,13 +32,16 @@ server:
   port: 8080
   secret: change-me-to-random-string
 
+# Video sources: name: path or URL
+# / prefix = local directory (auto-detected)
+# http prefix = remote API (auto-detected)
 sources:
-  默认: /videos           # /开头 = 本地目录
-  舞蹈: /videos/舞蹈       # 自动识别为local
-  远程: https://example.com/api/random  # http开头 = 远程API
+  default: /videos
+  dance: /videos/dance
+  remote: https://example.com/api/random
 ```
 
-**Rules**: `/` prefix = local path, `http` prefix = remote API URL. No type field needed.
+No `type` field needed - just use `/path` for local or `https://url` for remote.
 
 ```bash
 docker exec djj vi /data/config.yaml
@@ -54,30 +60,46 @@ Mount video directories as read-only:
 ```yaml
 volumes:
   - djj-data:/data
-  - /path/to/dance:/videos/舞蹈:ro
+  - /path/to/dance:/videos/dance:ro
 ```
+
+## Adaptive UI
+
+One page, two layouts. JavaScript detects user agent and switches:
+
+| Feature | Mobile | Desktop |
+|---------|--------|---------|
+| Layout | Full-screen video | Video + sidebar |
+| Navigation | Swipe up/down | Keyboard N/P |
+| Pause | Single tap | Space |
+| Fullscreen | Double tap | F |
+| Switch source | Button | S key or button |
+| Mode toggle | Button | M key or button |
+| Favorites | Long-press heart | Favorites button |
 
 ## Controls
 
 ### Mobile
 - Swipe up/down: next/prev video
-- Swipe left/right: hide/show text
+- Swipe left/right: hide/show text overlay
 - Single tap: pause/resume
 - Double tap: fullscreen
 
 ### Desktop
-- `Space`: pause | `N` / `Up`: next | `P` / `Down`: prev
-- `F`: fullscreen | `S`: switch source | `M`: loop mode
+- `Space`: pause | `N` / `ArrowUp`: next | `P` / `ArrowDown`: prev
+- `F`: fullscreen | `S`: switch source | `M`: loop/continuous mode
 
 ## API
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/random?source=name` | Get random video token |
-| `GET /api/play?token=xxx` | Stream video |
+| `GET /api/play?token=xxx` | Stream video (local file or remote proxy) |
 | `GET /api/sources` | List sources and stats |
 
-Remote API should return: `{"video_url": "...", "name": "..."}`
+Remote API should return: `{"video_url": "direct_link", "name": "title"}`
+
+Also compatible: `{"url": "...", "title": "..."}` and nested `{"data": {"url": "...", "title": "..."}}`
 
 ## License
 
