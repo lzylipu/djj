@@ -7,8 +7,9 @@ services:
       - "8080:8080"
     volumes:
       - djj-data:/data
-      # 视频目录挂载(只读)
-      # - /path/to/videos:/videos/name:ro
+      # 视频目录挂载(只读, 目录名=源名)
+      # - /path/to/videos:/videos/默认:ro
+      # - /path/to/舞蹈:/videos/舞蹈:ro
     environment:
       - PORT=8080
       # 密钥环境变量见.env.example
