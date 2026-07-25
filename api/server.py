@@ -95,28 +95,43 @@ def _abs_url(url, base):
     return url
 
 
-def _domain_of(url):
-    """从源 URL 提取显示用域名(去掉 www. 前缀),用于拼 @域名 后缀"""
+def _domain_root(url):
+    """从 URL 提取二级域名根,如 https://api.yujn.cn/x -> yujn.cn
+    纯 stdlib 实现:
+    - api.yujn.cn  -> yujn.cn
+    - www.lcc8.com -> lcc8.com
+    - xjj.nxux.cn  -> nxux.cn
+    - v.api.aa1.cn -> aa1.cn
+    - yx520.ltd    -> yx520.ltd(只剩两段时直接返回)
+    对 .com.cn/.co.uk 这类三段 TLD 处理不完美,但国内小姐姐 API 站
+    域名基本是 *.cn/*.com/*.ltd/*.net 两段 TLD,够用.
+    """
     try:
-        host = urlparse(url).hostname or ""
+        host = (urlparse(url or "").hostname or "").lower()
     except Exception:
         return ""
-    if host.lower().startswith("www."):
-        host = host[4:]
-    return host
+    if not host:
+        return ""
+    parts = host.split(".")
+    if len(parts) <= 2:
+        # 已经是 root,如 yx520.ltd / yujn.cn
+        return host
+    # 去 api./www./v./xjj. 这种子域前缀,保留最后两段
+    return ".".join(parts[-2:])
 
 
 def _display_name(raw_name, src_url):
-    """统一显示名规则: 原名@域名 (域名取自源URL,去 www.)
-    - 原名为空就用 '网络视频'
-    - 域名取不到就不加 @后缀
-    - 已含 @ 的不重复加(避免老数据 / 用户改)
+    """统一显示名规则: 直接返回源URL的二级域名根
+    - api.yujn.cn  -> yujn.cn
+    - www.lcc8.com -> lcc8.com
+    - xjj.nxux.cn  -> nxux.cn
+    - v.api.aa1.cn -> aa1.cn
+    前端 <span id="vidNamePC"> 就显示这个域名,不显示源名.
+    本地源不走这里(走 scanner._name_index 的 f.stem).
+    域名取不到就返回 '网络视频' 兜底.
     """
-    base = (raw_name or "").strip() or "网络视频"
-    if "@" in base:
-        return base
-    dom = _domain_of(src_url or "")
-    return f"{base}@{dom}" if dom else base
+    dom = _domain_root(src_url or "")
+    return dom or "网络视频"
 
 
 async def _fetch_one_source(name, meta):
@@ -164,11 +179,9 @@ async def _fetch_one_source(name, meta):
             if data is not None:
                 vu = _extract_json_video_url(data, json_path)
                 if vu:
-                    vn = _extract_json_name(data, json_path)
-                    # JSON 自带 title 用 title@域名, 否则用源名@域名
-                    final = _display_name(vn if vn and vn != "unknown" else name, url)
-                    token = register_remote(_abs_url(vu, str(resp.url)), final)
-                    return {"token": token, "name": final, "remote": True}
+                    # 显示名一律用源URL的二级域名根,与 302/mp4/text_url 等分支保持一致
+                    token = register_remote(_abs_url(vu, str(resp.url)), disp)
+                    return {"token": token, "name": disp, "remote": True}
                 # 空 url, 各源偶发返回空, 静默返回 None 让上层降级
 
         # mode=text_url: body 是纯文本 URL(diskgirl 返回 cdntube2.b-cdn.net/xxx.mp4)
