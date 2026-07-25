@@ -9,7 +9,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Arch-amd64%20%7C%20arm64-blue?style=flat-square&logo=linux&logoColor=white)]()
 
-**[English](./README.en.md) | 中文**
+**[English](./README_EN.md) | 中文**
 
 </div>
 
@@ -237,7 +237,7 @@ djj/
 │   └── 🔄 docker.yml              # 多架构镜像构建推送
 ├── 📜 LICENSE                     # MIT 许可证
 ├── 📖 README.md                   # 中文说明（本文件）
-└── 📖 README.en.md                # 英文说明
+└── 📖 README_EN.md                # 英文说明
 ```
 
 ---
