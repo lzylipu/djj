@@ -193,8 +193,9 @@ def get_random_any():
 
 
 def get_name(token):
-    """统一显示名: 本地token -> 文件名(stem); 远程token(r_xxx) -> 原名@域名
-    远程名字在 register_remote(_fetch_one_source里)已经拼成 原名@域名 了,
+    """统一显示名: 本地token -> 文件名(stem); 远程token(r_xxx) -> 二级域名根
+    远程的显示名在 register_remote(_fetch_one_source里)已通过 _display_name
+    提取为源URL的二级域名根(如 https://api.yujn.cn -> yujn.cn),存在 _remote_map,
     这里只负责把它从 _remote_map 取出来,跟本地 _name_index 统一入口.
     """
     if is_remote_token(token):
