@@ -10,7 +10,10 @@ from .scanner import (
     get_random, get_random_any, get_source_list, get_name, get_stats, scan_all,
     is_remote_source, is_group_source, get_remote_url, get_remote_meta,
     pick_source_from_group, report_source_fail, report_source_ok, get_group_list,
+    add_source, remove_source, reload_sources,
 )
+from fastapi import Request
+from fastapi.responses import PlainTextResponse
 
 app = FastAPI(title="DJJ", docs_url=None, redoc_url=None)
 WEB_DIR = Path(__file__).parent.parent / "web"
@@ -79,6 +82,16 @@ def _abs_url(url, base):
     if url.startswith("/"):
         p = urlparse(str(base))
         return f"{p.scheme}://{p.netloc}{url}"
+    if url.startswith("./"):
+        # 相对当前路径,取 base 的目录拼
+        p = urlparse(str(base))
+        base_dir = str(p.path).rsplit("/", 1)[0]
+        return f"{p.scheme}://{p.netloc}{base_dir}/{url[2:]}"
+    if not (url.startswith("http://") or url.startswith("https://")):
+        # 既不是绝对URL也不是根/相对路径,补 base 的 scheme://netloc + path + url
+        p = urlparse(str(base))
+        if p.netloc:
+            return f"{p.scheme}://{p.netloc}/{url.lstrip('/')}"
     return url
 
 
@@ -272,6 +285,9 @@ async def api_play(token: str):
             return JSONResponse({"error": "invalid remote token"}, status_code=403)
         try:
             vid_url = info["url"]
+            # 防御: register_remote 时偶尔存进来的不是合法 http(s) URL
+            if not (vid_url.startswith("http://") or vid_url.startswith("https://")):
+                return JSONResponse({"error": "invalid remote url in token"}, status_code=502)
             sep = "&" if "?" in vid_url else "?"
             vid_url += f"{sep}_t={random.random()}"
             resp = await http_client.get(vid_url, timeout=60.0, follow_redirects=True)
@@ -309,6 +325,78 @@ async def api_play(token: str):
 @app.get("/api/sources")
 async def api_sources():
     return {"sources": get_source_list(), "stats": get_stats()}
+
+
+# ============================================================
+# Admin API: 运行时增/删/重载源(用 X-DJJ-Secret 头校验)
+# 服务器启动前在 config.yaml 里设 server.secret=xxx,调用方传相同值
+# ============================================================
+
+def _check_admin(request: Request):
+    """校验 X-DJJ-Secret 头是否匹配 server.secret;不匹配返回 False"""
+    expected = str(CFG.get("api_secret", ""))
+    if not expected or expected == "change-me-to-random-string":
+        return False  # 默认值不允许管理
+    got = request.headers.get("X-DJJ-Secret", "")
+    return got == expected
+
+
+@app.post("/api/admin/sources")
+async def admin_add_source(request: Request):
+    """添加/替换一个远程源. body 是 dict:
+    {name, url, group?, mode?, json_path?, weight?, retry?}
+    同 name 已存在则整体替换.持久化回 config.yaml.
+    """
+    if not _check_admin(request):
+        return JSONResponse({"error": "forbidden: invalid or missing X-DJJ-Secret"}, status_code=403)
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    name = str(body.get("name", "")).strip()
+    url = str(body.get("url", "")).strip()
+    if not name or not url:
+        return JSONResponse({"error": "name and url required"}, status_code=400)
+    # 构造与 config.yaml 同 schema 的 entry
+    entry: dict = {"name": name, "url": url}
+    for opt in ("group", "mode", "json_path"):
+        v = body.get(opt)
+        if v is not None and str(v).strip():
+            entry[opt] = str(v).strip()
+    for opt in ("weight", "retry"):
+        try:
+            v = int(body.get(opt, 0))
+            if v >= 1:
+                entry[opt] = v
+        except Exception:
+            pass
+    try:
+        add_source(entry)
+        return {"ok": True, "name": name, "sources": get_source_list(), "stats": get_stats()}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.delete("/api/admin/sources")
+async def admin_del_source(request: Request, name: str):
+    """按源名删除一个源(包括独立远程源或组内成员).?name=xxx"""
+    if not _check_admin(request):
+        return JSONResponse({"error": "forbidden: invalid or missing X-DJJ-Secret"}, status_code=403)
+    name = (name or "").strip()
+    if not name:
+        return JSONResponse({"error": "name query param required"}, status_code=400)
+    done = remove_source(name)
+    return {"ok": done, "name": name, "sources": get_source_list(), "stats": get_stats()}
+
+
+@app.post("/api/admin/reload")
+async def admin_reload(request: Request):
+    """重新从磁盘加载 config.yaml 重建索引(直接编辑挂载的 config.yaml 后调用)."""
+    if not _check_admin(request):
+        return JSONResponse({"error": "forbidden: invalid or missing X-DJJ-Secret"}, status_code=403)
+    reload_sources()
+    print("[djj] Admin reloaded config.yaml")
+    return {"ok": True, "sources": get_source_list(), "stats": get_stats()}
 
 
 @app.get("/", response_class=HTMLResponse)

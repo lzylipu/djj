@@ -189,6 +189,98 @@ def get_name(token):
     return _name_index.get(token, "未知")
 
 
+def add_source(entry):
+    """运行时新增/替换一个远程源并热重载索引.
+    entry 结构与 config.yaml 里 list-of-dict 一致:
+      {name, url, group, mode, json_path, weight, retry}
+    同 name 已存在时整体替换.
+    """
+    from .config import add_source_to_yaml
+    name = str(entry.get("name", "")).strip()
+    if not name or not entry.get("url"):
+        raise ValueError("name and url required")
+    add_source_to_yaml(entry)
+    # 热重载内存索引(保留 token_map & _name_index;只刷 source 索引)
+    _hot_reload_sources()
+
+
+def remove_source(name):
+    """按源名删除并热重载.返回是否删除成功."""
+    from .config import remove_source_from_yaml
+    name = str(name).strip()
+    if not name:
+        return False
+    removed, _ = remove_source_from_yaml(name)
+    if removed:
+        _hot_reload_sources()
+        return True
+    return False
+
+
+def reload_sources():
+    """从磁盘重新加载 config.yaml 并重建索引(增删后调用)."""
+    _hot_reload_sources()
+
+
+def _hot_reload_sources():
+    """重建内存索引(sw: _source_index/_remote_sources/_local_sources/_group_index),
+    保留 _group_blacklist 的熔断状态以便删除/添加时熔断状态平滑.
+    """
+    from .config import reload_cfg
+    reload_cfg()
+    # 清空源相关索引但保留熔断表
+    _source_index.clear()
+    _remote_sources.clear()
+    _local_sources.clear()
+    _group_index.clear()
+    _name_index.clear()
+    from .config import CFG as _new_cfg
+    sources = _new_cfg.get("sources", [])
+    for src in sources:
+        name = src.get("name", "未命名")
+        stype = src.get("type", "local")
+        if stype == "remote":
+            url = src.get("url", "")
+            if not url:
+                continue
+            _remote_sources[name] = {
+                "url": url,
+                "group": src.get("group", ""),
+                "mode": src.get("mode", "auto"),
+                "json_path": src.get("json_path", ""),
+                "retry": int(src.get("retry", 1)),
+                "weight": int(src.get("weight", 1)),
+                "fails": 0,
+            }
+            _source_index[name] = []
+            grp = src.get("group", "")
+            if grp:
+                _group_index.setdefault(grp, []).append(name)
+            print(f"[djj] REMOTE {name}{(' @group=' + grp) if grp else ''} : {url}")
+        else:
+            # 本地源要重新扫文件
+            path = src.get("path", "")
+            p = Path(path)
+            _local_sources[name] = path
+            if not p.exists():
+                _source_index[name] = []
+                continue
+            from .auth import register_file
+            tokens = []
+            for f in p.rglob("*"):
+                if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS:
+                    token = register_file(str(f))
+                    tokens.append(token)
+                    _name_index[token] = f.stem
+            _source_index[name] = tokens
+            print(f"[djj] LOCAL {name}: {len(tokens)} videos from {path}")
+    # 清掉熔断表里已被删除的源(原地改写,不重新赋值)
+    for k in list(_group_blacklist.keys()):
+        if k[1] not in _remote_sources and k[0] not in _group_index:
+            del _group_blacklist[k]
+
+
+
 def get_stats():
     sources = {}
     # 本地 + 独立远程

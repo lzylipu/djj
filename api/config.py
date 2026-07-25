@@ -81,9 +81,9 @@ def _load():
                 group = str(entry.get("group", "")).strip()
                 if group:
                     out["group"] = group
-                # 远程源模式: 302 / json / html / mp4 / auto(默认 auto)
+                # 远程源模式: 302 / json / html / mp4 / text_url / auto(默认 auto)
                 mode = str(entry.get("mode", "auto")).strip().lower()
-                if mode in ("302", "json", "html", "mp4", "auto"):
+                if mode in ("302", "json", "html", "mp4", "text_url", "auto"):
                     out["mode"] = mode
                 # JSON 路径(可选 dot path 如 "data.video"),不填走旧的多key兼容
                 jpath = str(entry.get("json_path", "")).strip()
@@ -113,3 +113,50 @@ def _load():
     }
 
 CFG = _load()
+
+
+def reload_cfg():
+    """热重载: 重新读盘 config.yaml,返回新的 CFG(全局 CFG 会被替换)."""
+    global CFG
+    CFG = _load()
+    return CFG
+
+
+def save_sources_to_yaml(sources_entries):
+    """把增删后的 sources_entries(已是 list-of-dict)持久化回 config.yaml.
+    保留 server 段和顶层注释这块是简单的"全量重写":丢失旧注释但功能最稳.
+    """
+    import yaml as _y
+    data = {
+        "server": CFG.get("raw", {}).get("server", {"port": CFG.get("port"), "secret": CFG.get("api_secret")}),
+        "sources": sources_entries,
+    }
+    with open(CFG_PATH, "w", encoding="utf-8") as f:
+        _y.safe_dump(data, f, allow_unicode=True, sort_keys=False, default_flow_style=False)
+    # 重载以便 CFG.raw 也跟着更新
+    return reload_cfg()
+
+
+def add_source_to_yaml(entry):
+    """向 config.yaml 追加一个源(同 name 已存在则替换).返回新 sources 列表."""
+    cur = list(CFG.get("raw", {}).get("sources") or [])
+    if not isinstance(cur, list):
+        cur = []
+    name = str(entry.get("name", "")).strip()
+    # 替换同 name
+    cur = [s for s in cur if not (isinstance(s, dict) and str(s.get("name", "")).strip() == name)]
+    cur.append(entry)
+    return save_sources_to_yaml(cur)
+
+
+def remove_source_from_yaml(name):
+    """按 name 删除 config.yaml 里的源;返回删除前的条目数和删除后的列表."""
+    cur = list(CFG.get("raw", {}).get("sources") or [])
+    if not isinstance(cur, list):
+        cur = []
+    before = len(cur)
+    new = [s for s in cur if not (isinstance(s, dict) and str(s.get("name", "")).strip() == name)]
+    after = len(new)
+    if before != after:
+        save_sources_to_yaml(new)
+    return before - after, new
