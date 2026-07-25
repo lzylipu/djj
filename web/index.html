@@ -120,11 +120,7 @@ function mute(){player.muted=true;soundOn=false;if(sHint)sHint.style.display='bl
 
 document.addEventListener('click',unmute);
 
-/* playing event = try unmute immediately */
-player.addEventListener('playing',function(){
-  if(!soundOn){player.muted=false;soundOn=true;if(sHint)sHint.style.display='none'}
-});
-
+/* playing event = unmute + clear watchdog */
 /* === Favs === */
 function GF(){try{return JSON.parse(localStorage.getItem('djj_favs')||'[]')}catch(e){return[]}}
 function SF(f){localStorage.setItem('djj_favs',JSON.stringify(f))}
@@ -141,6 +137,24 @@ async function fetchRandom(){
   var r=await fetch(u);if(!r.ok)throw new Error();return r.json()
 }
 
+var playWatchdog=null,playingNow=false;
+player.addEventListener('playing',function(){
+  playingNow=true;
+  if(playWatchdog){clearTimeout(playWatchdog);playWatchdog=null}
+  if(!soundOn){player.muted=false;soundOn=true;if(sHint)sHint.style.display='none'}
+});
+function startWatchdog(label){
+  if(playWatchdog)clearTimeout(playWatchdog);
+  playingNow=false;
+  playWatchdog=setTimeout(function(){
+    if(!playingNow){console.log('[watchdog] '+label+' >2s no playing -> next');
+      if(vidS)vidS.textContent='上游太慢,自动跳过';
+      L=false;
+      playNext();
+    }
+  },2000);
+}
+
 async function playNext(){
   if(L)return;L=true;
   if(vidS)vidS.textContent='加载中...';
@@ -148,6 +162,7 @@ async function playNext(){
     try{
       var d=await fetchRandom();
       player.src='/api/play?token='+encodeURIComponent(d.token);
+      startWatchdog('source='+d.name);
       try{await player.play()}catch(e){}
       player.muted=false;soundOn=true;if(sHint)sHint.style.display='none';
       if(vidS)vidS.textContent='▶ 播放中';

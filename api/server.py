@@ -401,7 +401,7 @@ async def api_play(token: str):
             sep = "&" if "?" in vid_url else "?"
             play_url = f"{vid_url}{sep}_t={random.random()}"
             _log(rid, "PLAY", f"remote: name='{saved_name}' fetching upstream {play_url[:100]}")
-            resp = await http_client.get(play_url, timeout=60.0, follow_redirects=True)
+            resp = await http_client.get(play_url, timeout=1.5, follow_redirects=True)
             dt = int((time.time() - t0) * 1000)
             _log(rid, "PLAY", f"upstream resp status={resp.status_code} ct={resp.headers.get('content-type','')[:40]} len={resp.headers.get('content-length','?')} {dt}ms")
             resp.raise_for_status()
@@ -415,7 +415,8 @@ async def api_play(token: str):
             )
         except httpx.TimeoutException:
             dt = int((time.time() - t0) * 1000)
-            _log(rid, "PLAY", f"OUT 502 remote TIMEOUT {dt}ms (name='{info.get('name','?')}')" if 'info' in locals() else f"OUT 502 remote TIMEOUT {dt}ms")
+            nm = info.get('name','?') if isinstance(info,dict) else '?'
+            _log(rid, "PLAY", f"OUT 502 SLOW upstream >1500ms ({dt}ms) name='{nm}' - dropping, will fallback on next random")
             return JSONResponse({"error": "remote video fetch timeout"}, status_code=502)
         except httpx.HTTPError as he:
             dt = int((time.time() - t0) * 1000)
