@@ -1,11 +1,16 @@
-import random, os, httpx, subprocess, asyncio, json
+import random, os, httpx, subprocess, asyncio, json, re
 from pathlib import Path
+from urllib.parse import urlparse
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from .auth import resolve_token, is_remote_token, get_remote_info, register_remote
 from .config import CFG
-from .scanner import get_random, get_random_any, get_source_list, get_name, get_stats, scan_all, is_remote_source, get_remote_url
+from .scanner import (
+    get_random, get_random_any, get_source_list, get_name, get_stats, scan_all,
+    is_remote_source, is_group_source, get_remote_url, get_remote_meta,
+    pick_source_from_group, report_source_fail, report_source_ok, get_group_list,
+)
 
 app = FastAPI(title="DJJ", docs_url=None, redoc_url=None)
 WEB_DIR = Path(__file__).parent.parent / "web"
@@ -16,7 +21,7 @@ http_client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
 async def startup():
     scan_all()
     stats = get_stats()
-    print(f"[djj] Ready: {stats['local_total']} local, {stats['remote_count']} remote sources")
+    print(f"[djj] Ready: {stats['local_total']} local, {stats['remote_count']} remote, {stats['group_count']} group")
 
 
 @app.on_event("shutdown")
@@ -24,114 +29,201 @@ async def shutdown():
     await http_client.aclose()
 
 
-def _parse_remote_response(data, resp):
-    """从远程API响应中提取视频URL和名称，兼容多种格式"""
-    # JSON格式: {"video_url":"..."} / {"url":"..."} / {"data":{"url":"..."}}
-    if isinstance(data, dict):
-        video_url = (data.get("video_url") or data.get("url")
-                     or data.get("data", {}).get("url", "")
-                     or data.get("data", {}).get("link", ""))
-        video_name = (data.get("name") or data.get("title")
-                      or data.get("data", {}).get("title", "unknown"))
-        return video_url, video_name
-    return "", "unknown"
+def _dig(obj, dotpath):
+    """按 dot path 取嵌套字段: data.video -> obj['data']['video']"""
+    cur = obj
+    for k in dotpath.split("."):
+        if cur is None:
+            return ""
+        if isinstance(cur, dict):
+            cur = cur.get(k)
+        elif isinstance(cur, list):
+            try:
+                cur = cur[int(k)]
+            except Exception:
+                return ""
+        else:
+            return ""
+    return cur or ""
 
 
-async def _fetch_remote(remote_url):
-    """请求远程视频源，兼容：302 Location跳转、JSON API、直接mp4流、HTML"""
+def _extract_json_video_url(data, json_path=""):
+    """从 JSON 取视频 URL,优先 json_path 配置,否则走老兼容多 key"""
+    if json_path:
+        v = _dig(data, json_path)
+        if isinstance(v, str) and v:
+            return v
+        if isinstance(v, dict):
+            return v.get("url") or v.get("video_url") or v.get("link") or ""
+    # 老兼容: video_url / url / data.url / data.link / data.video
+    if not isinstance(data, dict):
+        return ""
+    return (data.get("video_url") or data.get("url")
+            or (data.get("data", {}) or {}).get("url", "")
+            or (data.get("data", {}) or {}).get("link", "")
+            or (data.get("data", {}) or {}).get("video", ""))
+
+
+def _extract_json_name(data, json_path=""):
+    n = data.get("name") if isinstance(data, dict) else ""
+    if not n and isinstance(data, dict):
+        n = data.get("title") or (data.get("data", {}) or {}).get("title", "")
+    return n or "unknown"
+
+
+def _abs_url(url, base):
+    if not url:
+        return ""
+    if url.startswith("//"):
+        return "https:" + url
+    if url.startswith("/"):
+        p = urlparse(str(base))
+        return f"{p.scheme}://{p.netloc}{url}"
+    return url
+
+
+async def _fetch_one_source(name, meta):
+    """对单个远程源做一次取视频尝试,返回 {token,name,remote} 或 None.
+    兼容: 302 Location / JSON / 直接 mp4 流 / HTML 内嵌 video src.
+    受 meta['mode'] 约束:'302' 'json' 'html' 'mp4' 'auto'(默认).
+    """
+    url = meta.get("url", "")
+    mode = meta.get("mode", "auto")
+    json_path = meta.get("json_path", "")
+    if not url:
+        return None
     try:
-        # 第一步：发请求，不follow redirect，检查是否302跳转
-        resp = await http_client.get(remote_url, timeout=15.0, follow_redirects=False)
-        
-        # 302/301跳转 → 取Location（如 v.nrzj.vip、tmini _t=0.）
+        # auto/302/直链模式: 不要 follow,以便看 Location
+        # json/html: 直接 follow 取最终 body
+        follow = mode in ("json", "html")
+        resp = await http_client.get(url, timeout=15.0, follow_redirects=follow)
+
+        # 302/301 跳转
         if resp.status_code in (301, 302, 303, 307, 308):
-            location = resp.headers.get("location", "")
-            if location:
-                if location.startswith("//"):
-                    location = "https:" + location
-                token = register_remote(location, "远程视频")
-                return {"token": token, "name": "远程视频", "remote": True}
+            loc = resp.headers.get("location", "")
+            if loc:
+                vu = _abs_url(loc, url)
+                token = register_remote(vu, name)
+                return {"token": token, "name": name, "remote": True}
 
         resp.raise_for_status()
-        content_type = resp.headers.get("content-type", "").lower()
+        ct = (resp.headers.get("content-type") or "").lower()
 
-        # 直接mp4流
-        if "video" in content_type or "octet-stream" in content_type:
-            video_url = str(resp.url)
-            token = register_remote(video_url, "远程视频")
-            return {"token": token, "name": "远程视频", "remote": True}
+        # 直接 mp4 流(资源网有时直接吐 mp4) 或 mode=mp4
+        if mode == "mp4" or "video" in ct or "octet-stream" in ct:
+            vu = str(resp.url)
+            token = register_remote(vu, name)
+            return {"token": token, "name": name, "remote": True}
 
-        # JSON响应（如 tmini mp4=json）
-        for attempt in range(3):
+        # JSON
+        if mode == "json" or (mode == "auto" and "json" in ct):
             try:
                 data = resp.json()
-                video_url, video_name = _parse_remote_response(data, resp)
-                if video_url:
-                    token = register_remote(video_url, video_name)
-                    return {"token": token, "name": video_name, "remote": True}
-                # 空url → 重试（tmini偶尔返回空）
-                import asyncio
-                await asyncio.sleep(0.5)
-                resp = await http_client.get(remote_url, timeout=15.0, follow_redirects=False)
-                if resp.status_code in (301, 302, 303, 307, 308):
-                    location = resp.headers.get("location", "")
-                    if location:
-                        if location.startswith("//"):
-                            location = "https:" + location
-                        token = register_remote(location, "远程视频")
-                        return {"token": token, "name": "远程视频", "remote": True}
             except Exception:
-                if attempt == 2:
-                    pass
+                data = None
+            if data is not None:
+                vu = _extract_json_video_url(data, json_path)
+                if vu:
+                    vn = _extract_json_name(data, json_path)
+                    token = register_remote(_abs_url(vu, str(resp.url)), vn or name)
+                    return {"token": token, "name": vn or name, "remote": True}
+                # 空 url, 各源偶发返回空, 静默返回 None 让上层降级
 
-        # HTML页面: 提取 video src（如 tucdn）
-        html = resp.text
-        for pat in [r'src="([^"]*\.mp4[^"]*)"', r"src='([^']*\.mp4[^']*)'"]:
-            srcs = __import__("re").findall(pat, html)
-            if srcs:
-                video_url = srcs[0]
-                if video_url.startswith("//"):
-                    video_url = "https:" + video_url
-                elif video_url.startswith("/"):
-                    from urllib.parse import urlparse
-                    parsed = urlparse(str(resp.url))
-                    video_url = f"{parsed.scheme}://{parsed.netloc}{video_url}"
-                token = register_remote(video_url, "热舞视频")
-                return {"token": token, "name": "热舞视频", "remote": True}
+        # mode=text_url: body 是纯文本 URL(diskgirl 返回 cdntube2.b-cdn.net/xxx.mp4)
+        if mode == "text_url" or (mode == "auto" and ct.startswith("text/plain")):
+            body = (resp.text or "").strip()
+            # 截出第一行,排除多行
+            line = body.splitlines()[0].strip() if body else ""
+            # 合法 URL 判定: 含 .mp4 或 含 http(s)
+            if line and ("http://" in line or "https://" in line):
+                token = register_remote(line, name)
+                return {"token": token, "name": name, "remote": True}
 
-        # 都不匹配
+        # HTML 内嵌 video src
+        if mode == "html" or mode == "auto":
+            html = resp.text
+            for pat in [r'src="([^"]*\.mp4[^"]*)"', r"src='([^']*\.mp4[^']*)'",
+                        r'src="([^"]*video\.php[^"]*)"', r"src='([^']*video\.php[^']*)'"]:
+                srcs = re.findall(pat, html)
+                if srcs:
+                    vu = _abs_url(srcs[0], str(resp.url))
+                    token = register_remote(vu, name)
+                    return {"token": token, "name": name, "remote": True}
+
         return None
-    except httpx.HTTPError as e:
-        print(f"[djj] Remote fetch failed: {e}")
+    except Exception as e:
+        print(f"[djj] source '{name}' fetch failed: {type(e).__name__}: {e}")
         return None
+
+
+async def _fetch_group(group, max_attempts=None):
+    """聚合分发器: 从 group 内按权重随机选未熔断源,失败自动降级到下一个,直到成功或全部失败."""
+    tried = set()
+    # 试 N 次,每次挑一个还没试过的源
+    total = 0
+    while True:
+        name = pick_source_from_group(group, exclude=tried)
+        if name is None:
+            break
+        tried.add(name)
+        total += 1
+        meta = get_remote_meta(name) or {}
+        # 单源 retry
+        result = None
+        for _ in range(int(meta.get("retry", 1))):
+            result = await _fetch_one_source(name, meta)
+            if result:
+                break
+        if result:
+            report_source_ok(group, name)
+            print(f"[djj] group '{group}' hit source '{name}'")
+            # 把 group 标记写进 token name -- 用 source 名作为显示名,前端可见
+            if "name" in result:
+                result["name"] = result["name"] or name
+            return result
+        report_source_fail(group, name)
+        if max_attempts and total >= max_attempts:
+            break
+    return None
 
 
 @app.get("/api/random")
 async def api_random(source: str | None = None):
-    # 指定远程源
+    # 1. 聚合组
+    if source and is_group_source(source):
+        result = await _fetch_group(source)
+        if result:
+            return result
+        return JSONResponse({"error": "all group sources failed"}, status_code=502)
+
+    # 2. 单独远程源(配置里没标 group)
     if source and is_remote_source(source):
-        remote_url = get_remote_url(source)
-        if remote_url:
-            result = await _fetch_remote(remote_url)
-            if result:
-                return result
-            return JSONResponse({"error": "remote fetch failed"}, status_code=502)
+        meta = get_remote_meta(source) or {}
+        result = await _fetch_one_source(source, meta)
+        if result:
+            return result
+        return JSONResponse({"error": "remote fetch failed"}, status_code=502)
 
     all_sources = get_source_list()
     if source:
         # 指定本地源
         token = get_random(source)
     else:
-        # 混合随机：按比例选择远程/本地
+        # 混合随机:按比例选择远程/本地/聚合组
+        group_names = [s for s in all_sources if is_group_source(s)]
         remote_names = [s for s in all_sources if is_remote_source(s)]
-        local_names = [s for s in all_sources if not is_remote_source(s)]
-        if remote_names and (not local_names or random.random() < len(remote_names) / len(all_sources)):
+        local_names = [s for s in all_sources if not is_remote_source(s) and not is_group_source(s)]
+        # 总权重: 优先 group(单次返回成功的概率高),然后 remote,最后 local
+        if group_names and (not local_names or random.random() < 0.5):
+            result = await _fetch_group(random.choice(group_names))
+            if result:
+                return result
+        if remote_names and (not local_names or random.random() < len(remote_names) / max(1, len(all_sources))):
             rs = random.choice(remote_names)
-            remote_url = get_remote_url(rs)
-            if remote_url:
-                result = await _fetch_remote(remote_url)
-                if result:
-                    return result
+            meta = get_remote_meta(rs) or {}
+            result = await _fetch_one_source(rs, meta)
+            if result:
+                return result
         token = get_random_any()
 
     if not token:
@@ -153,20 +245,19 @@ async def _transcode_if_needed(file_path: str):
         info = json.loads(stdout)
         codec = info.get("streams", [{}])[0].get("codec_name", "")
         if codec in ("h264", "hevc", "av1"):
-            return None  # 浏览器原生支持，不需要转码
-        return codec  # 需要转码
+            return None
+        return codec
     except Exception:
         return None
 
 async def _ffmpeg_stream(file_path: str):
-    """用ffmpeg实时转码为H.264 mp4返回流"""
     proc = await asyncio.create_subprocess_exec(
         FFMPEG_PATH, "-i", file_path,
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
         "-c:a", "aac", "-b:a", "128k",
         "-movflags", "frag_keyframe+empty_moov",
         "-f", "mp4",
-        "-",  # stdout
+        "-",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
     )
@@ -180,8 +271,6 @@ async def api_play(token: str):
         if not info:
             return JSONResponse({"error": "invalid remote token"}, status_code=403)
         try:
-            # 直接在最终视频URL上加随机参数防缓存
-            import random
             vid_url = info["url"]
             sep = "&" if "?" in vid_url else "?"
             vid_url += f"{sep}_t={random.random()}"
@@ -201,7 +290,6 @@ async def api_play(token: str):
     if not file_path or not os.path.isfile(file_path):
         return JSONResponse({"error": "invalid token"}, status_code=403)
 
-    # 检测视频编码，非H.264自动转码
     codec = await _transcode_if_needed(file_path)
     if codec:
         print(f"[djj] Transcoding {Path(file_path).name} ({codec} -> h264)")

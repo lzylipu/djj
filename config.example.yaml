@@ -2,30 +2,43 @@ server:
   port: 8080
   secret: change-me-to-random-string
 
-# 视频源: 源名: URL
-# / 开头 = 本地目录(自动扫描)
-# http开头 = 远程API(自动识别)
-#
-# 支持的远程源类型:
-#   · 302跳转: 取Location头中的mp4 URL (v.nrzj.vip, tmini _t)
-#   · JSON API: 提取url/video_url/data.link (tmini mp4=json)
-#   · 直接mp4流: 每次返回随机mp4 (yujn)
-#   · HTML: 提取video src (tucdn)
+# DJJ v3: sources 支持 list-of-dict 结构
+# 字段:
+#   name:      源名(中文展示名)
+#   url:       远程视频源 URL(带 ? 或 & 的需用双引号)
+#   group:     (可选)同 group 的多个源聚合为单一虚拟源
+#              前端下拉框只显示组名一条;组内 weight 加权随机 + 失败自动降级 + 熔断60s
+#   mode:      auto/302/json/html/mp4 (默认 auto)
+#   json_path: mode=json 时指定提取路径,如 "data.video"
+#   weight:    组内权重(默认1,数字大被选中概率高)
+#   retry:     单源内部重试次数(默认1)
+#   path:      本地源目录(普通 string 旧式也支持,自动识别为 local)
+# 老式全 dict 写法仍兼容:
+#   sources:
+#     小姐姐: https://example.com/api
+
 sources:
-  # --- 本地目录(取消注释即可启用) ---
-  # 默认: /videos
-  # 舞蹈: /videos/舞蹈
-  # 搞笑: /videos/搞笑
+  # --- 本地目录(示例,取消用) ---
+  # - name: 本地视频
+  #   path: /videos
 
-  # --- 远程源(已验证) ---
-  # 小姐姐视频: JSON API -> 快手随机视频
-  小姐姐: https://tmini.net/api/meinv?mp4=json&r=
-
-  # 绅士视频: 302跳转 -> 快手mp4
-  绅士视频: https://v.nrzj.vip/video.php
-
-  # 随机视频: 直接mp4流, 快手H.264
-  随便看: https://api.yujn.cn/api/zzxjj.php
-
-  # 热舞视频: HTML页面 -> 提取video src
-  热舞视频: https://tucdn.wpon.cn/api-girl/index.php?type=video
+  # --- 聚合组:全部"随机小姐姐" ---
+  # 14 个 302 跳转源 + 2 个 JSON 源,统一聚合为"随机小姐姐"
+  - {name: 绅士视频,   url: "https://v.nrzj.vip/video.php",                                          group: 随机小姐姐, mode: 302,  weight: 3}
+  - {name: yujn小姐姐, url: "https://api.yujn.cn/api/zzxjj.php",                                       group: 随机小姐姐, mode: 302,  weight: 3}
+  - {name: yujn2,      url: "https://api.yujn.cn/api/xjj.php",                                         group: 随机小姐姐, mode: 302,  weight: 2}
+  - {name: yujn快手,   url: "https://api.yujn.cn/api/ksxjjsp.php",                                      group: 随机小姐姐, mode: 302,  weight: 3}
+  - {name: yujn百思,   url: "https://api.yujn.cn/api/baisis.php",                                      group: 随机小姐姐, mode: 302,  weight: 2}
+  - {name: yujnJK,     url: "https://api.yujn.cn/api/jksp.php",                                        group: 随机小姐姐, mode: 302,  weight: 2}
+  - {name: yujn抖音,   url: "https://api.yujn.cn/api/dmsp.php",                                        group: 随机小姐姐, mode: 302,  weight: 2}
+  - {name: sao.fm,     url: "https://sao.fm/api/xjj/api/video.php",                                     group: 随机小姐姐, mode: 302,  weight: 2}
+  - {name: nxux,       url: "https://xjj.nxux.cn/dy.php",                                             group: 随机小姐姐, mode: 302,  weight: 2}
+  - {name: yx520,      url: "http://www.yx520.ltd/API/xjj/api.php?msg=xjj",                            group: 随机小姐姐, mode: 302,  weight: 2}
+  # ⭐ 独立 CDN 库(避免快手 CDN 单点风险)
+  - {name: aa1dyGirl, url: "https://v.api.aa1.cn/api/api-dy-girl/index.php?aa1=ajdu987hrjfw",          group: 随机小姐姐, mode: 302,  weight: 3}
+  - {name: lcc8,       url: "https://www.lcc8.com/sv/video.php",                                       group: 随机小姐姐, mode: 302,  weight: 3}
+  - {name: cunshao,    url: "https://www.cunshao.com/666666/api/web.php",                              group: 随机小姐姐, mode: 302,  weight: 3}
+  - {name: diskgirl,   url: "https://diskgirl.com/get/get1.php",                                       group: 随机小姐姐, mode: text_url, weight: 3}
+  # wzapi JSON 模式: video 字段直接是 mp4 URL
+  - {name: wzapi社姐,   url: "https://wzapi.com/api/sjxjjsp?format=json&category=shejie",             group: 随机小姐姐, mode: json, json_path: "data.video", weight: 2}
+  - {name: wzapi高质量, url: "https://wzapi.com/api/sjxjjsp?format=json&category=gaozhiliang",       group: 随机小姐姐, mode: json, json_path: "data.video", weight: 2}

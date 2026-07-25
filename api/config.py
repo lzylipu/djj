@@ -45,10 +45,10 @@ def _load():
     if sources_raw is None:
         sources_raw = {}
 
+    # v2 dict 兼容 + v3 list-of-dict 扩展
     sources = []
     if isinstance(sources_raw, dict):
         for name, value in sources_raw.items():
-            # 跳过空的或注释键
             if not name or not str(value).strip():
                 continue
             stype, sval = _detect_type(value)
@@ -59,7 +59,49 @@ def _load():
                 entry["path"] = sval
             sources.append(entry)
     elif isinstance(sources_raw, list):
-        sources = sources_raw
+        for entry in sources_raw:
+            if not isinstance(entry, dict):
+                continue
+            name = str(entry.get("name", "")).strip()
+            if not name:
+                continue
+            # 兼容 url/path,否则按 value 自动探测
+            if "url" in entry:
+                stype, sval = "remote", str(entry["url"]).strip()
+            elif "path" in entry:
+                stype, sval = "local", str(entry["path"]).strip()
+            else:
+                stype, sval = _detect_type(entry.get("value", ""))
+            if not sval:
+                continue
+            out = {"name": name, "type": stype}
+            if stype == "remote":
+                out["url"] = sval
+                # v3 新增 group: 同 group 多源聚合为单一虚拟源,内部负载均衡
+                group = str(entry.get("group", "")).strip()
+                if group:
+                    out["group"] = group
+                # 远程源模式: 302 / json / html / mp4 / auto(默认 auto)
+                mode = str(entry.get("mode", "auto")).strip().lower()
+                if mode in ("302", "json", "html", "mp4", "auto"):
+                    out["mode"] = mode
+                # JSON 路径(可选 dot path 如 "data.video"),不填走旧的多key兼容
+                jpath = str(entry.get("json_path", "")).strip()
+                if jpath:
+                    out["json_path"] = jpath
+                # 单源重试(默认1)
+                try:
+                    out["retry"] = max(1, int(entry.get("retry", 1)))
+                except Exception:
+                    out["retry"] = 1
+                # 权重(默认1,组内随机时权重越大被选中概率越高)
+                try:
+                    out["weight"] = max(1, int(entry.get("weight", 1)))
+                except Exception:
+                    out["weight"] = 1
+            else:
+                out["path"] = sval
+            sources.append(out)
 
     return {
         "port": int(os.getenv("PORT", server.get("port", 8080))),
