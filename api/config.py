@@ -9,15 +9,32 @@ _DEFAULT_YAML = """server:
   port: 8080
   secret: change-me-to-random-string
 
-# 视频源: 源名: 路径或URL
-# / 开头 = 本地目录(自动识别)
-# http 开头 = 远程API(自动识别)
-# 注意: 源名不要用 # 开头，否则会被当成注释
+# DJJ v3 配置文件 - 本地源 + 网络聚合源
+# 字段详细说明见 https://github.com/lzylipu/djj (config.example.yaml)
+# 本地源: 容器 -v /your/path:/videos 挂载,scanner 递归扫描 mp4/avi/mkv/mov/webm/flv
+# 网络源: 所有 url 都标 group=网络,前端下拉只看见 '网络' 一个选项,组内按 weight 加权随机
+#         失败自动降级到下一个未熔断源,连续失败 2 次熔断 60s
 sources:
-  默认: /videos
-  # 舞蹈: /videos/舞蹈
-  # 搞笑: /videos/搞笑
-  # 远程示例: https://example.com/api/random
+  # === 本地源 ===
+  - name: 本地视频
+    path: /videos
+
+  # === 网络聚合组 (唯一虚拟源 '网络') ===
+  - {name: yujn小姐姐, url: "https://api.yujn.cn/api/zzxjj.php",                                group: 网络, mode: 302, weight: 3}
+  - {name: yujn2,      url: "https://api.yujn.cn/api/xjj.php",                                  group: 网络, mode: 302, weight: 2}
+  - {name: yujn快手,   url: "https://api.yujn.cn/api/ksxjjsp.php",                              group: 网络, mode: 302, weight: 3}
+  - {name: yujn百思,   url: "https://api.yujn.cn/api/baisis.php",                               group: 网络, mode: 302, weight: 2}
+  - {name: yujnJK,     url: "https://api.yujn.cn/api/jksp.php",                                group: 网络, mode: 302, weight: 2}
+  - {name: yujn抖音,   url: "https://api.yujn.cn/api/dmsp.php",                                group: 网络, mode: 302, weight: 1}
+  - {name: nxux,       url: "https://xjj.nxux.cn/dy.php",                                      group: 网络, mode: 302, weight: 1}
+  - {name: yx520,      url: "http://www.yx520.ltd/API/xjj/api.php?msg=xjj",                    group: 网络, mode: 302, weight: 2}
+  - {name: aa1dyGirl,  url: "https://v.api.aa1.cn/api/api-dy-girl/index.php?aa1=ajdu987hrjfw", group: 网络, mode: 302, weight: 3}
+  - {name: lcc8,       url: "https://www.lcc8.com/sv/video.php",                               group: 网络, mode: 302, weight: 3}
+  - {name: cunshao,    url: "https://www.cunshao.com/666666/api/web.php",                      group: 网络, mode: 302, weight: 3}
+  - {name: apiyt302,   url: "https://api.yujn.cn/api/zzxjj.php",                               group: 网络, mode: 302, weight: 2}
+  - {name: diskgirl,   url: "https://diskgirl.com/get/get1.php",                              group: 网络, mode: text_url, weight: 1}
+  - {name: wzapi社姐,   url: "https://wzapi.com/api/sjxjjsp?format=json&category=shejie",     group: 网络, mode: json, json_path: "data.video", weight: 3}
+  - {name: wzapi高质量, url: "https://wzapi.com/api/sjxjjsp?format=json&category=gaozhiliang", group: 网络, mode: json, json_path: "data.video", weight: 3}
 """
 
 def _detect_type(value):
