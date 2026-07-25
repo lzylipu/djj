@@ -151,39 +151,75 @@ docker run -d \
 
 ## 🎛 配置说明
 
-编辑 `/data/config.yaml`，修改后 **重启容器** 生效：
+**容器首次启动时，`/data/config.yaml` 会自动生成**，含 1 个本地源 + 15 个网络聚合源的完整默认模板，可按需编辑后 **重启容器** 生效。
+
+> 📌 默认模板已带全 15 个 publicly-known 网络源（`yujn/nxux/yx520/aa1dy/lcc8/cunshao/wzapi` 等），无需 API Key，直接可用。
+
+### 视频源格式（v3 list-of-dict）
+
+每个源是一个 YAML dict，有两种完全等价的写法，可混用：
+
+```yaml
+# 写法 A — 多行经典缩进 (易读易改)
+- name: 抖音精选
+  path: /videos/抖音
+
+# 写法 B — 单行行内 flow dict (紧凑)
+- {name: 抖音精选, path: /videos/抖音}
+```
+
+### 字段说明
+
+| 字段 | 必填 | 说明 |
+|:-----|:----:|:-----|
+| `name`     | ✅ | 显示名（中英文均可，唯一即可） |
+| `path`     | 本地源必填 | 容器内绝对路径，如 `/videos` 或 `/videos/抖音`；需用 `-v` 挂载进去 |
+| `url`      | 远程源必填 | API 地址，`http://` 或 `https://` 开头 |
+| `group`    | 远程源必填 | 分组名，默认填 `网络`；所有同 group 的远程源合成一个聚合组，前端下拉看见分组名，组内按 `weight` 加权随机 + 失败自动降级 |
+| `mode`     | 远程源可选 | 响应类型，默认 `auto` 自动嗅探。详见下表 |
+| `json_path`| `mode=json` 必填 | 视频字段在 JSON 中的路径，如 `data.video` 或 `data.list.0.url` |
+| `weight`   | 可选 | 整数，默认 1；同组内按权重加权随机被选中 |
+| `retry`    | 可选 | 整数，默认 2；连续失败超此次数即熔断此源 60s |
+
+### 远程源 `mode` 类型
+
+| mode | 识别方式 | 示例源 |
+|:-----|:---------|:-------|
+| 🔄 `auto`（默认） | 后端嗅探 | — |
+| 🔀 `302` | API 返回 302 跳转，`Location` 头指向 mp4 直链 | `api.yujn.cn` |
+| 📦 `json` | 返回 JSON，需配 `json_path` 取嵌套字段 | `wzapi.com` |
+| 🎥 `mp4` | 直接返回 `video/*` 内容流 | — |
+| 📄 `html` | 返回 HTML，提取 `<video src="...">` | `tucdn.wpon.cn` |
+| 📝 `text_url` | 返回纯文本 URL（如 `https://xxx.mp4`） | `diskgirl.com` |
+
+### 完整 `config.yaml` 示例
 
 ```yaml
 server:
   port: 8080
-  secret: change-me-to-random-string   # ⚠️ 等同于 API_SECRET 环境变量
+  secret: change-me-to-random-string   # ⚠️ 生产环境必须改；或设 API_SECRET 环境变量覆盖
 
-# 视频源: 源名: 路径或URL
-# / 开头 = 本地目录(自动扫描子目录)
-# http 开头 = 远程API(自动识别类型)
 sources:
-  # --- 📁 本地目录(取消注释即可启用) ---
-  默认: /videos
-  # 舞蹈: /videos/舞蹈
-  # 搞笑: /videos/搞笑
+  # === 🔴 删除不需要的行，复制需要的行改名即可 ===
 
-  # --- 🌐 远程源(无需API Key, 自动识别类型) ---
-  小姐姐: https://tmini.net/api/meinv?mp4=json&r=
-  绅士视频: https://v.nrzj.vip/video.php
-  随便看: https://api.yujn.cn/api/zzxjj.php
-  热舞视频: https://tucdn.wpon.cn/api-girl/index.php?type=video
+  # 本地源：只写 name + path，需 docker -v 挂进来
+  - {name: 本地视频, path: /videos}
+  # 多个本地目录用子目录挂载 + 多条本地源：
+  - {name: 抖音精选, path: /videos/抖音}
+  - {name: 美好肉体, path: /videos/肉体}
+
+  # 网络聚合组：所有标 group=网络 的源合成一个聚合组，前端下拉只看见"网络"
+  - {name: yujn小姐姐, url: "https://api.yujn.cn/api/zzxjj.php",                                group: 网络, mode: 302, weight: 3}
+  - {name: yx520,      url: "http://www.yx520.ltd/API/xjj/api.php?msg=xjj",                    group: 网络, mode: 302, weight: 2}
+  - {name: lcc8,       url: "https://www.lcc8.com/sv/video.php",                               group: 网络, mode: 302, weight: 3}
+  - {name: cunshao,    url: "https://www.cunshao.com/666666/api/web.php",                      group: 网络, mode: 302, weight: 3}
+  - {name: wzapi社姐,  url: "https://wzapi.com/api/sjxjjsp?format=json&category=shejie",      group: 网络, mode: json, json_path: "data.video", weight: 3}
+  # ... 默认模板共 15 个网络源，详见 /data/config.yaml
 ```
 
 > 💡 **环境变量优先级高于配置文件**：`API_SECRET` 环境变量会覆盖 `config.yaml` 中的 `secret` 字段。
-
-### 🌐 远程源类型（自动识别）
-
-| 类型 | 识别方式 | 示例源 |
-|:-----|:---------|:-------|
-| 🔀 302 跳转 | `Location` 头指向 mp4 | `v.nrzj.vip` |
-| 📦 JSON API | 返回 `{url:...}` / `{video_url:...}` / `{data:{link:...}}` | `tmini.net` |
-| 🎥 直接 MP4 流 | 返回 `video/*` 内容 | `api.yujn.cn` |
-| 📄 HTML 页面 | 提取 `<video src="...">` | `tucdn.wpon.cn` |
+>
+> ⚠️ 本地视频目录需用 `-v` 挂载到容器内绝对路径（通常 `/videos` 或其子目录），scanner 会递归扫描 `mp4/avi/mkv/mov/webm/flv`。
 
 ---
 

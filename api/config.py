@@ -5,21 +5,61 @@ DATA_DIR = Path(os.getenv('DJJ_DATA', '/data'))
 CFG_PATH = DATA_DIR / 'config.yaml'
 _SKEY = "API" + "_SECRET"
 
-_DEFAULT_YAML = """server:
-  port: 8080
-  secret: change-me-to-random-string
+_DEFAULT_YAML = """# ============================================================
+# DJJ v3 配置文件 - 首次启动自动生成,可按需编辑后重启容器生效
+# 完整字段说明 / 高级用法: https://github.com/lzylipu/djj
+# ============================================================
 
-# DJJ v3 配置文件 - 本地源 + 网络聚合源
-# 字段详细说明见 https://github.com/lzylipu/djj (config.example.yaml)
-# 本地源: 容器 -v /your/path:/videos 挂载,scanner 递归扫描 mp4/avi/mkv/mov/webm/flv
-# 网络源: 所有 url 都标 group=网络,前端下拉只看见 '网络' 一个选项,组内按 weight 加权随机
-#         失败自动降级到下一个未熔断源,连续失败 2 次熔断 60s
+server:
+  port: 8080                              # 服务端口,通常不必修改(容器端口由 -p 控制)
+  # 容器启动时若设了 API_SECRET 环境变量,会覆盖这里的 secret
+  secret: change-me-to-random-string      # ⚠️ 生产环境必须改成随机字符串
+
+# ---- 视频源 (v3 list-of-dict 格式) ----
+# 每个 source 是一个 dict,YAML 有两种等价写法:
+#
+#   写法 A (多行,经典缩进, 易读易改):
+#     - name: 抖音精选
+#       path: /videos/抖音
+#
+#   写法 B (单行,行内 flow dict, 紧凑):
+#     - {name: 抖音精选, path: /videos/抖音}
+#
+# 两种写法效果完全等价,可混用。下文网络源用 B 写法,本地源用 A 写法做示范。
+#
+# 字段说明:
+#   name        显示名(必填,中英文均可,唯一即可)
+#   path        本地目录(必填,容器内绝对路径,如 /videos 或 /videos/抖音;需 docker -v 挂进来)
+#   url         远程 API(必填,http/https 开头)
+#   group       分组名(远程源必填,默认填 "网络";所有同 group 的远程源合成一个"聚合组",
+#               前端下拉只看见 group 名,组内按 weight 加权随机,失败自动降级下一个未熔断源)
+#   mode        远程源响应类型,可选 302 / json / html / mp4 / text_url / auto (默认 auto)
+#               302      = API 返回 302 跳转,Location 头指向 mp4 直链
+#               json     = API 返回 JSON,需配 json_path 指定视频字段路径(支持点号取嵌套)
+#               html     = API 返回 HTML,自动提取 <video src="...">
+#               mp4      = API 直接返回 video/* 内容流
+#               text_url = API 返回纯文本 URL,如 https://xxx.mp4
+#               auto     = 自动嗅探(默认,多数情况无需手动指定)
+#   json_path   仅 mode=json 时必填,如 "data.video" 或 "data.list.0.url"
+#   weight      权重(可选,默认 1,整数;同组内 weight=sum 后按比例随机)
+#   retry       单源允许重试次数(可选,默认 2,连续失败超此次数即熔断此源)
 sources:
-  # === 本地源 ===
+
+  # === 本地源 (列在这里的目录会被 scanner 递归扫描) ===
+  # 本地源不写 group/url/mode,只写 name + path
+  # path 必须是容器内存在的目录,通过 docker -v /your/host/path:/videos/子目录 挂载进来
   - name: 本地视频
     path: /videos
+  # 多个本地目录示例(取消注释即可,每个目录独立可选):
+  # - name: 抖音精选
+  #   path: /videos/抖音
+  # - name: 美好肉体
+  #   path: /videos/肉体
 
-  # === 网络聚合组 (唯一虚拟源 '网络') ===
+  # === 网络聚合组 "网络"===
+  # 所有标 group: 网络 的远程源会被合并成一个聚合组
+  # 前端下拉只看见一个 "网络" 选项,源名(name)只在 /api/admin/sources 调试用,前端不展示
+  # 增删源: 复制其中一行,改名改 url 即可; 完全删源:删整行
   - {name: yujn小姐姐, url: "https://api.yujn.cn/api/zzxjj.php",                                group: 网络, mode: 302, weight: 3}
   - {name: yujn2,      url: "https://api.yujn.cn/api/xjj.php",                                  group: 网络, mode: 302, weight: 2}
   - {name: yujn快手,   url: "https://api.yujn.cn/api/ksxjjsp.php",                              group: 网络, mode: 302, weight: 3}
@@ -35,6 +75,8 @@ sources:
   - {name: diskgirl,   url: "https://diskgirl.com/get/get1.php",                              group: 网络, mode: text_url, weight: 1}
   - {name: wzapi社姐,   url: "https://wzapi.com/api/sjxjjsp?format=json&category=shejie",     group: 网络, mode: json, json_path: "data.video", weight: 3}
   - {name: wzapi高质量, url: "https://wzapi.com/api/sjxjjsp?format=json&category=gaozhiliang", group: 网络, mode: json, json_path: "data.video", weight: 3}
+  # 添加新的网络源示例 (取消注释,改 name/url 即可):
+  # - {name: 我的源, url: "https://your-api.com/xxx", group: 网络, mode: 302, weight: 1}
 """
 
 def _detect_type(value):
