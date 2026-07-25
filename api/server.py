@@ -217,31 +217,36 @@ async def api_random(source: str | None = None):
             return result
         return JSONResponse({"error": "remote fetch failed"}, status_code=502)
 
-    all_sources = get_source_list()
+    all_sources = get_source_list()  # 排序: 本地最前 -> 独立远程 -> 聚合组
     if source:
         # 指定本地源
         token = get_random(source)
-    else:
-        # 混合随机:按比例选择远程/本地/聚合组
-        group_names = [s for s in all_sources if is_group_source(s)]
-        remote_names = [s for s in all_sources if is_remote_source(s)]
-        local_names = [s for s in all_sources if not is_remote_source(s) and not is_group_source(s)]
-        # 总权重: 优先 group(单次返回成功的概率高),然后 remote,最后 local
-        if group_names and (not local_names or random.random() < 0.5):
-            result = await _fetch_group(random.choice(group_names))
-            if result:
-                return result
-        if remote_names and (not local_names or random.random() < len(remote_names) / max(1, len(all_sources))):
-            rs = random.choice(remote_names)
-            meta = get_remote_meta(rs) or {}
-            result = await _fetch_one_source(rs, meta)
-            if result:
-                return result
-        token = get_random_any()
+        if token:
+            return {"token": token, "name": get_name(token)}
+        return JSONResponse({"error": "no videos in source"}, status_code=404)
 
-    if not token:
-        return JSONResponse({"error": "no videos"}, status_code=404)
-    return {"token": token, "name": get_name(token)}
+    # === 无 source 参数:本地始终优先 ===
+    # 1. 先看本地有没有视频;有就 100% 用本地(本地映射文件夹里随机一个)
+    token = get_random_any()
+    if token:
+        return {"token": token, "name": get_name(token)}
+
+    # 2. 本地空(没挂载文件夹 or 没视频文件) → 用网络源
+    #    优先聚合组(内部自动加权随机 + 失败降级 + 熔断)
+    group_names = [s for s in all_sources if is_group_source(s)]
+    if group_names:
+        result = await _fetch_group(random.choice(group_names))
+        if result:
+            return result
+    # 3. 还不行 → 试独立远程源
+    remote_names = [s for s in all_sources if is_remote_source(s)]
+    for rs in remote_names:
+        meta = get_remote_meta(rs) or {}
+        result = await _fetch_one_source(rs, meta)
+        if result:
+            return result
+
+    return JSONResponse({"error": "no videos"}, status_code=404)
 
 
 FFMPEG_PATH = "/usr/bin/ffmpeg"

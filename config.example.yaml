@@ -4,7 +4,14 @@ server:
   # 改成你自己的随机字符串,然后调用 /api/admin/sources 时在 header 传同样值
   secret: change-me-to-random-string
 
-# DJJ v3: sources 支持 list-of-dict 结构,也兼容老的 dict 写法
+# DJJ v3: 配置文件两类源:
+#   1. 本地源 — 通过 path 字段挂载文件夹(容器内 -v 映射到 /videos 即可)
+#      递归扫描 mp4/avi/mkv/mov/webm/flv 全部视频文件做成可播源;
+#      始终在排序最前;无 source 参数时 100% 先玩本地.
+#   2. 网络源 — 通过 url + group + mode 配置远程视频 API;
+#      同 group 的多源聚合为 1 个虚拟源, 加权随机 + 失败自动降级 + 熔断60s;
+#      失效源在 config.yaml 里手动增删或用 /api/admin/sources API 热增删.
+#
 # 字段:
 #   name:      源名(中文展示名,前端下拉里看到的)
 #   url:       远程视频源 URL(带 ? 或 & 的需用双引号防 YAML 解析歧义)
@@ -33,11 +40,18 @@ server:
 # 4) 失效源连续失败2次会被自动熔断60秒,不需要手动删;手动删的源会从 config.yaml 持久化移除
 
 sources:
-  # --- 本地目录(示例,取消用) ---
-  # - name: 本地视频
-  #   path: /videos
+  # === 本地源(始终在排序最前;可取消注释直接用) ===
+  # 本地通过文件夹挂载到容器(`/videos`),Docker run 加:
+  #   -v /your/host/path:/videos
+  # 然后:
+  #   - name: 本地视频
+  #     path: /videos
+  # 启动会递归扫描 .mp4/.avi/.mkv/.mov/.webm/.flv 全部文件做成可播源.
+  # "换源全部" 下拉里本地源永远在最上面;无 source 参数时本地有视频就 100% 玩本地.
+  - name: 本地视频
+    path: /videos
 
-  # === 聚合组 1: "随机小姐姐"  (16 个抖音快手系列美女跳舞源) ===
+  # === 网络源 1: 随机小姐姐聚合组 (16 个 302/json/text_url 源) ===
   # 14 个 302 跳转源 + 1 个 text_url + 2 个 JSON 源
   - {name: 绅士视频,   url: "https://v.nrzj.vip/video.php",                                 group: 随机小姐姐, mode: 302,  weight: 3}
   - {name: yujn小姐姐, url: "https://api.yujn.cn/api/zzxjj.php",                              group: 随机小姐姐, mode: 302,  weight: 3}

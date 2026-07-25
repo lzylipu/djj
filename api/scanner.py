@@ -148,19 +148,26 @@ def report_source_ok(group, name):
 
 
 def get_source_list():
-    """对外暴露的源名列表 — 本地源 + 独立远程源 + 聚合组名(每个组只暴露1行)"""
-    out = list(_source_index.keys())
-    # 把组从"独立源名列表里隐藏",改为暴露组名
+    """对外暴露的源名列表 — 顺序: 本地源 -> 独立远程源 -> 聚合组名(组内成员隐藏).
+    本地源始终最前,前端下拉里"换源全部"按这个顺序展示.
+    """
+    # 1. 本地源(没在 group 里的 local)
+    local_names = []
+    for n, _ in _source_index.items():
+        if not is_remote_source(n) and not is_group_source(n):
+            local_names.append(n)
+    # 2. 独立远程源(标了 url 但没标 group 的)
+    remote_names = []
     seen_in_group = set()
     for grp, members in _group_index.items():
         for m in members:
             seen_in_group.add(m)
-    hidden = [n for n in out if n in seen_in_group]
-    for h in hidden:
-        out.remove(h)
-    # 添加聚合组名(用组名作源标识)
-    out.extend(list(_group_index.keys()))
-    return out
+    for n, _ in _source_index.items():
+        if is_remote_source(n) and n not in seen_in_group:
+            remote_names.append(n)
+    # 3. 聚合组名(每个组只暴露1行, 用组名作源标识)
+    group_names = list(_group_index.keys())
+    return local_names + remote_names + group_names
 
 
 def get_random(name):
