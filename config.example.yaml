@@ -9,14 +9,14 @@ server:
 #      递归扫描 mp4/avi/mkv/mov/webm/flv 全部视频文件做成可播源;
 #      始终在排序最前;无 source 参数时 100% 先玩本地.
 #   2. 网络源 — 通过 url + group + mode 配置远程视频 API;
-#      同 group 的多源聚合为 1 个虚拟源, 加权随机 + 失败自动降级 + 熔断60s;
-#      失效源在 config.yaml 里手动增删或用 /api/admin/sources API 热增删.
+#      所有 url 必须都标 group=网络,前端下拉只有"网络"一个虚拟源选项;
+#      组内 weight 加权随机 + 失败自动降级 + 熔断60s;
+#      失效源在 config.yaml 里手动增删或用 /api/admin/sources API 热增删(自动归入"网络"组).
 #
 # 字段:
 #   name:      源名(中文展示名,前端下拉里看到的)
 #   url:       远程视频源 URL(带 ? 或 & 的需用双引号防 YAML 解析歧义)
-#   group:     (可选)同 group 的多个源聚合为单一虚拟源
-#              前端下拉框只显示组名一条;组内 weight 加权随机 + 失败自动降级 + 熔断60s
+#   group:     必填,统一填 "网络"
 #   mode:      auto / 302 / json / html / mp4 / text_url (默认 auto)
 #              302      — 服务端 302 跳转,Location 头就是视频直链
 #              json     — JSON 响应,按 json_path 取直链(如 data.video)
@@ -25,57 +25,57 @@ server:
 #              text_url — body 是纯 URL 文本(如 diskboy.com/get/get1.php)
 #              auto     — 按 Content-Type 自动识别
 #   json_path: mode=json 时指定提取路径,如 "data.video" 或 "data.list.0.url"
-#   weight:    组内权重(默认1,数字大被选中概率高)
+#   weight:    组内权重(默认1,数字大被选中概率高).死源直接删掉、慢源 weight 改低
 #   retry:     单源内部重试次数(默认1)
 #   path:      本地源目录(普通 string 旧式也支持,自动识别为 local)
 #
-# === Runtime 增删源 ===
+# === 运行时增删源 ===
 # 1) 编辑挂载的 config.yaml 后调: curl -X POST -H 'X-DJJ-Secret: YOUR_SECRET' http://host:8080/api/admin/reload
-# 2) 用 API 加源(支持 302/json/text_url 等所有 mode):
+# 2) 用 API 加源(自动归入"网络"组,支持 302/json/text_url 等所有 mode):
 #    curl -X POST -H 'X-DJJ-Secret: YOUR_SECRET' -H 'Content-Type: application/json' \
-#      -d '{"name":"新源","url":"https://example.com/x.php","group":"网络","mode":"302","weight":2}' \
+#      -d '{"name":"新源","url":"https://example.com/x.php","mode":"302","weight":2}' \
 #      http://host:8080/api/admin/sources
 # 3) 用 API 删源:
 #    curl -X DELETE -H 'X-DJJ-Secret: YOUR_SECRET' 'http://host:8080/api/admin/sources?name=新源'
 # 4) 失效源连续失败2次会被自动熔断60秒,不需要手动删;手动删的源会从 config.yaml 持久化移除
 
 sources:
-  # === 本地源(始终在排序最前;可取消注释直接用) ===
+  # === 本地源(始终排序最前;此处默认是示例,挂载后就有视频) ===
   # 本地通过文件夹挂载到容器(`/videos`),Docker run 加:
   #   -v /your/host/path:/videos
-  # 然后:
-  #   - name: 本地视频
-  #     path: /videos
-  # 启动会递归扫描 .mp4/.avi/.mkv/.mov/.webm/.flv 全部文件做成可播源.
-  # "换源全部" 下拉里本地源永远在最上面;无 source 参数时本地有视频就 100% 玩本地.
+  # 启动递归扫描 .mp4/.avi/.mkv/.mov/.webm/.flv 全部文件做成可播源.
+  # "换源全部" 下拉里本地永远在最上面;无 source 参数时本地有视频就 100% 玩本地.
   - name: 本地视频
     path: /videos
 
-  # === 网络源 1: 随机小姐姐聚合组 (16 个 302/json/text_url 源) ===
-  # 14 个 302 跳转源 + 1 个 text_url + 2 个 JSON 源
-  - {name: 绅士视频,   url: "https://v.nrzj.vip/video.php",                                 group: 随机小姐姐, mode: 302,  weight: 3}
-  - {name: yujn小姐姐, url: "https://api.yujn.cn/api/zzxjj.php",                              group: 随机小姐姐, mode: 302,  weight: 3}
-  - {name: yujn2,      url: "https://api.yujn.cn/api/xjj.php",                                group: 随机小姐姐, mode: 302,  weight: 2}
-  - {name: yujn快手,   url: "https://api.yujn.cn/api/ksxjjsp.php",                             group: 随机小姐姐, mode: 302,  weight: 3}
-  - {name: yujn百思,   url: "https://api.yujn.cn/api/baisis.php",                             group: 随机小姐姐, mode: 302,  weight: 2}
-  - {name: yujnJK,     url: "https://api.yujn.cn/api/jksp.php",                               group: 随机小姐姐, mode: 302,  weight: 2}
-  - {name: yujn抖音,   url: "https://api.yujn.cn/api/dmsp.php",                               group: 随机小姐姐, mode: 302,  weight: 2}
-  - {name: sao.fm,     url: "https://sao.fm/api/xjj/api/video.php",                           group: 随机小姐姐, mode: 302,  weight: 2}
-  - {name: nxux,       url: "https://xjj.nxux.cn/dy.php",                                    group: 随机小姐姐, mode: 302,  weight: 2}
-  - {name: yx520,      url: "http://www.yx520.ltd/API/xjj/api.php?msg=xjj",                   group: 随机小姐姐, mode: 302,  weight: 2}
-  - {name: aa1dyGirl,  url: "https://v.api.aa1.cn/api/api-dy-girl/index.php?aa1=ajdu987hrjfw", group: 随机小姐姐, mode: 302,  weight: 3}
-  - {name: lcc8,       url: "https://www.lcc8.com/sv/video.php",                              group: 随机小姐姐, mode: 302,  weight: 3}
-  - {name: cunshao,    url: "https://www.cunshao.com/666666/api/web.php",                     group: 随机小姐姐, mode: 302,  weight: 3}
-  - {name: diskgirl,   url: "https://diskgirl.com/get/get1.php",                             group: 随机小姐姐, mode: text_url, weight: 3}
-  - {name: wzapi社姐,   url: "https://wzapi.com/api/sjxjjsp?format=json&category=shejie",     group: 随机小姐姐, mode: json, json_path: "data.video", weight: 2}
-  - {name: wzapi高质量, url: "https://wzapi.com/api/sjxjjsp?format=json&category=gaozhiliang", group: 随机小姐姐, mode: json, json_path: "data.video", weight: 2}
+  # === 唯一聚合组 "网络" ===
+  # 所有 url 都聚合成一个虚拟源 — 前端下拉只看见"网络"一个选项.
+  # 服务端按 weight 加权随机选 1 个成员;失败自动降级到下一个未熔断的;连续失败2次熔断60s.
+  # 死源(直接剔)、慢源(weight 改低) 由维护者定夺.
+  #
+  # === 14 个 302 跳转源 ===
+  - {name: yujn小姐姐, url: "https://api.yujn.cn/api/zzxjj.php",                                group: 网络, mode: 302, weight: 3}
+  - {name: yujn2,      url: "https://api.yujn.cn/api/xjj.php",                                  group: 网络, mode: 302, weight: 2}
+  - {name: yujn快手,   url: "https://api.yujn.cn/api/ksxjjsp.php",                              group: 网络, mode: 302, weight: 3}
+  - {name: yujn百思,   url: "https://api.yujn.cn/api/baisis.php",                               group: 网络, mode: 302, weight: 2}
+  - {name: yujnJK,     url: "https://api.yujn.cn/api/jksp.php",                                group: 网络, mode: 302, weight: 2}
+  - {name: yujn抖音,   url: "https://api.yujn.cn/api/dmsp.php",                                group: 网络, mode: 302, weight: 1}
+  # nxux 二跳 (loc 会跳到 yujn),放低权重
+  - {name: nxux,       url: "https://xjj.nxux.cn/dy.php",                                      group: 网络, mode: 302, weight: 1}
+  - {name: yx520,      url: "http://www.yx520.ltd/API/xjj/api.php?msg=xjj",                    group: 网络, mode: 302, weight: 2}
+  # ⭐ 独立 CDN (避免快手 CDN 单点风险),weight 高
+  - {name: aa1dyGirl,  url: "https://v.api.aa1.cn/api/api-dy-girl/index.php?aa1=ajdu987hrjfw", group: 网络, mode: 302, weight: 3}
+  - {name: lcc8,       url: "https://www.lcc8.com/sv/video.php",                               group: 网络, mode: 302, weight: 3}
+  - {name: cunshao,    url: "https://www.cunshao.com/666666/api/web.php",                      group: 网络, mode: 302, weight: 3}
+  - {name: apiyt302,   url: "https://api.yujn.cn/api/zzxjj.php",                               group: 网络, mode: 302, weight: 2}   # 重复 zzxjj 备份选
+  # === text_url / json 源 ===
+  # diskgirl 走 b-cdn.net 海外 + 1s+ 响应,降骄防卡用户
+  - {name: diskgirl,   url: "https://diskgirl.com/get/get1.php",                              group: 网络, mode: text_url, weight: 1}
+  # wzapi JSON 模式,video 字段直接是 mp4 URL — 最稳的源
+  - {name: wzapi社姐,   url: "https://wzapi.com/api/sjxjjsp?format=json&category=shejie",     group: 网络, mode: json, json_path: "data.video", weight: 3}
+  - {name: wzapi高质量, url: "https://wzapi.com/api/sjxjjsp?format=json&category=gaozhiliang", group: 网络, mode: json, json_path: "data.video", weight: 3}
 
-  # === 聚合组 2: "网络"  (示例: 跨不同 mode 类型, 自定义命名的占位组) ===
-  # 增加/删除这里的条目即可在前端下拉里看到"网络"这个虚拟源按钮
-  - {name: 网络演示302,  url: "https://api.yujn.cn/api/zzxjj.php", group: 网络, mode: 302,  weight: 2}
-  - {name: 网络演示JSON, url: "https://wzapi.com/api/sjxjjsp?format=json&category=shejie", group: 网络, mode: json, json_path: "data.video", weight: 2}
-  - {name: 网络演示直链, url: "https://diskgirl.com/get/get1.php", group: 网络, mode: text_url, weight: 2}
-  # 删这条 + 改源可演示运行时 admin API 加新源,例:
-  # curl -X POST -H 'X-DJJ-Secret: change-me-to-random-string' -H 'Content-Type: application/json' \
-  #   -d '{"name":"网络新源","url":"https://api.yujn.cn/api/xjj.php","group":"网络","mode":"302"}' \
-  #   http://host:8080/api/admin/sources
+# === 已移除 (死或过期,不要再加回去) ===
+# - 绅士视频 — 跳到 yximgs.com 2019年的 mp4 带 tag 时间戳,快手CDN 早返 403
+# - sao.fm   — 同上,跳到 2019/02/17/.../mp4,过期
+# - 独立远程  — 此前的"独立远程"是没标 group 的样例,会作为前端单独一个选项.已删掉

@@ -95,29 +95,56 @@ def _abs_url(url, base):
     return url
 
 
+def _domain_of(url):
+    """从源 URL 提取显示用域名(去掉 www. 前缀),用于拼 @域名 后缀"""
+    try:
+        host = urlparse(url).hostname or ""
+    except Exception:
+        return ""
+    if host.lower().startswith("www."):
+        host = host[4:]
+    return host
+
+
+def _display_name(raw_name, src_url):
+    """统一显示名规则: 原名@域名 (域名取自源URL,去 www.)
+    - 原名为空就用 '网络视频'
+    - 域名取不到就不加 @后缀
+    - 已含 @ 的不重复加(避免老数据 / 用户改)
+    """
+    base = (raw_name or "").strip() or "网络视频"
+    if "@" in base:
+        return base
+    dom = _domain_of(src_url or "")
+    return f"{base}@{dom}" if dom else base
+
+
 async def _fetch_one_source(name, meta):
     """对单个远程源做一次取视频尝试,返回 {token,name,remote} 或 None.
     兼容: 302 Location / JSON / 直接 mp4 流 / HTML 内嵌 video src.
     受 meta['mode'] 约束:'302' 'json' 'html' 'mp4' 'auto'(默认).
+    返回的 name 统一为 原名@域名 形式,本地源对比则是 文件名(stem),前端一眼能看出视频出处.
     """
     url = meta.get("url", "")
     mode = meta.get("mode", "auto")
     json_path = meta.get("json_path", "")
     if not url:
         return None
+    # 显示名始终基于源URL的域名,不管走到哪个分支都用同一个 _display_name
+    disp = _display_name(name, url)
     try:
         # auto/302/直链模式: 不要 follow,以便看 Location
         # json/html: 直接 follow 取最终 body
         follow = mode in ("json", "html")
-        resp = await http_client.get(url, timeout=15.0, follow_redirects=follow)
+        resp = await http_client.get(url, timeout=6.0, follow_redirects=follow)
 
         # 302/301 跳转
         if resp.status_code in (301, 302, 303, 307, 308):
             loc = resp.headers.get("location", "")
             if loc:
                 vu = _abs_url(loc, url)
-                token = register_remote(vu, name)
-                return {"token": token, "name": name, "remote": True}
+                token = register_remote(vu, disp)
+                return {"token": token, "name": disp, "remote": True}
 
         resp.raise_for_status()
         ct = (resp.headers.get("content-type") or "").lower()
@@ -125,8 +152,8 @@ async def _fetch_one_source(name, meta):
         # 直接 mp4 流(资源网有时直接吐 mp4) 或 mode=mp4
         if mode == "mp4" or "video" in ct or "octet-stream" in ct:
             vu = str(resp.url)
-            token = register_remote(vu, name)
-            return {"token": token, "name": name, "remote": True}
+            token = register_remote(vu, disp)
+            return {"token": token, "name": disp, "remote": True}
 
         # JSON
         if mode == "json" or (mode == "auto" and "json" in ct):
@@ -138,8 +165,10 @@ async def _fetch_one_source(name, meta):
                 vu = _extract_json_video_url(data, json_path)
                 if vu:
                     vn = _extract_json_name(data, json_path)
-                    token = register_remote(_abs_url(vu, str(resp.url)), vn or name)
-                    return {"token": token, "name": vn or name, "remote": True}
+                    # JSON 自带 title 用 title@域名, 否则用源名@域名
+                    final = _display_name(vn if vn and vn != "unknown" else name, url)
+                    token = register_remote(_abs_url(vu, str(resp.url)), final)
+                    return {"token": token, "name": final, "remote": True}
                 # 空 url, 各源偶发返回空, 静默返回 None 让上层降级
 
         # mode=text_url: body 是纯文本 URL(diskgirl 返回 cdntube2.b-cdn.net/xxx.mp4)
@@ -149,8 +178,8 @@ async def _fetch_one_source(name, meta):
             line = body.splitlines()[0].strip() if body else ""
             # 合法 URL 判定: 含 .mp4 或 含 http(s)
             if line and ("http://" in line or "https://" in line):
-                token = register_remote(line, name)
-                return {"token": token, "name": name, "remote": True}
+                token = register_remote(line, disp)
+                return {"token": token, "name": disp, "remote": True}
 
         # HTML 内嵌 video src
         if mode == "html" or mode == "auto":
@@ -160,8 +189,8 @@ async def _fetch_one_source(name, meta):
                 srcs = re.findall(pat, html)
                 if srcs:
                     vu = _abs_url(srcs[0], str(resp.url))
-                    token = register_remote(vu, name)
-                    return {"token": token, "name": name, "remote": True}
+                    token = register_remote(vu, disp)
+                    return {"token": token, "name": disp, "remote": True}
 
         return None
     except Exception as e:

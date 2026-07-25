@@ -2,7 +2,7 @@ import random
 import time
 from pathlib import Path
 from .config import CFG
-from .auth import register_file
+from .auth import register_file, is_remote_token, get_remote_info
 
 _source_index = {}      # name -> [token, ...]  (local文件token列表/remote为空)
 _name_index = {}        # token -> display_name
@@ -193,6 +193,13 @@ def get_random_any():
 
 
 def get_name(token):
+    """统一显示名: 本地token -> 文件名(stem); 远程token(r_xxx) -> 原名@域名
+    远程名字在 register_remote(_fetch_one_source里)已经拼成 原名@域名 了,
+    这里只负责把它从 _remote_map 取出来,跟本地 _name_index 统一入口.
+    """
+    if is_remote_token(token):
+        info = get_remote_info(token) or {}
+        return info.get("name") or "未知"
     return _name_index.get(token, "未知")
 
 
