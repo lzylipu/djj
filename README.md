@@ -96,6 +96,24 @@ volumes:
 ```
 </details>
 
+## 🔁 拉取最新版本（升级）
+
+```bash
+# 1. 拉最新镜像
+docker pull lzylipu/djj:latest
+
+# 2a. docker run 方式：先 rm 旧容器再用相同命令重建
+docker rm -f djj
+# 再执行上面的 docker run ...
+
+# 2b. docker-compose 方式：直接 up -d 会自动重建
+docker compose pull && docker compose up -d
+```
+
+> 💡 配置文件（`config.yaml` 在 `/data` 挂载里）和本地视频目录在升级时保持不变，无需重新配置。
+
+---
+
 ### 🐳 方式二：Docker Run
 
 ```bash
