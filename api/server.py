@@ -337,7 +337,7 @@ async def api_random(source: str | None = None):
     # 3. 还不行 -> 试独立远程源
     remote_names = [s for s in all_sources if is_remote_source(s)]
     if remote_names:
-        _log(rid, "RAND", f"all groups exausted, trying lone remotes: {remote_names}")
+        _log(rid, "RAND", f"all groups exhausted, trying lone remotes: {remote_names}")
     for rs in remote_names:
         meta = get_remote_meta(rs) or {}
         result = await _fetch_one_source(rs, meta, rid=rid)
@@ -401,7 +401,9 @@ async def api_play(token: str):
             sep = "&" if "?" in vid_url else "?"
             play_url = f"{vid_url}{sep}_t={random.random()}"
             _log(rid, "PLAY", f"remote: name='{saved_name}' fetching upstream {play_url[:100]}")
-            resp = await http_client.get(play_url, timeout=1.5, follow_redirects=True)
+            resp = await http_client.get(play_url,
+                timeout=httpx.Timeout(connect=1.5, read=1.5, write=5.0, pool=1.5),
+                follow_redirects=True)
             dt = int((time.time() - t0) * 1000)
             _log(rid, "PLAY", f"upstream resp status={resp.status_code} ct={resp.headers.get('content-type','')[:40]} len={resp.headers.get('content-length','?')} {dt}ms")
             resp.raise_for_status()

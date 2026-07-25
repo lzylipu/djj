@@ -137,7 +137,7 @@ async function fetchRandom(){
   var r=await fetch(u);if(!r.ok)throw new Error();return r.json()
 }
 
-var playWatchdog=null,playingNow=false;
+var playWatchdog=null,playingNow=false,gen=0;
 player.addEventListener('playing',function(){
   playingNow=true;
   if(playWatchdog){clearTimeout(playWatchdog);playWatchdog=null}
@@ -146,9 +146,14 @@ player.addEventListener('playing',function(){
 function startWatchdog(label){
   if(playWatchdog)clearTimeout(playWatchdog);
   playingNow=false;
+  var myGen=gen;
   playWatchdog=setTimeout(function(){
-    if(!playingNow){console.log('[watchdog] '+label+' >2s no playing -> next');
+    if(!playingNow && myGen===gen){
+      console.log('[watchdog] '+label+' >2s no playing -> release old stream & next');
       if(vidS)vidS.textContent='上游太慢,自动跳过';
+      // 释放旧流,避免旧 aiter_bytes 继续推流占带宽
+      try{player.pause()}catch(e){}
+      try{player.removeAttribute('src');player.load()}catch(e){}
       L=false;
       playNext();
     }
@@ -157,13 +162,17 @@ function startWatchdog(label){
 
 async function playNext(){
   if(L)return;L=true;
+  gen++;                       // 本次取视频的"代",旧的 await 回来对不上就放弃
+  var myGen=gen;
   if(vidS)vidS.textContent='加载中...';
   for(var retry=0;retry<3;retry++){
     try{
       var d=await fetchRandom();
+      if(myGen!==gen){console.log('[playNext] stale, aborted');return}
       player.src='/api/play?token='+encodeURIComponent(d.token);
       startWatchdog('source='+d.name);
       try{await player.play()}catch(e){}
+      if(myGen!==gen){console.log('[playNext] stale after play(), aborted');return}
       player.muted=false;soundOn=true;if(sHint)sHint.style.display='none';
       if(vidS)vidS.textContent='▶ 播放中';
       if(vidN)vidN.textContent='@'+(d.name||'未知');
