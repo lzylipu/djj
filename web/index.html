@@ -70,8 +70,8 @@
     </div>
 
     <div class="pc-keys">
-      <kbd>Space</kbd>暂停 <kbd>N</kbd>下一个 <kbd>P</kbd>上一个
-      <kbd>F</kbd>全屏 <kbd>S</kbd>换源 <kbd>M</kbd>模式 <kbd>V</kbd>声音
+      <kbd>Space</kbd>暂停/播放 <kbd>←</kbd>上一个 <kbd>→</kbd>下一个
+      <kbd>↑</kbd>切换模式 <kbd>↓</kbd>切换播放源 <kbd>Enter</kbd>全屏
     </div>
 
     <div class="pc-disclaimer">仅供学习研究 · 视频采集自网络</div>
@@ -85,7 +85,7 @@
 </div>
 
 <!-- Sound hint -->
-<div class="sound-hint" id="soundHint">&#x1F50A; 点击页面或按V开启声音</div>
+<div class="sound-hint" id="soundHint">&#x1F50A; 点击页面开启声音</div>
 
 <script>
 (function(){
@@ -117,7 +117,6 @@ function unmute(){if(player.muted){player.muted=false;soundOn=true;if(sHint)sHin
 function mute(){player.muted=true;soundOn=false;if(sHint)sHint.style.display='block'}
 
 document.addEventListener('click',unmute);
-document.addEventListener('keydown',function(e){if(e.key==='v'||e.key==='V'){soundOn?mute():unmute();e.preventDefault()}});
 
 /* playing event = try unmute immediately */
 player.addEventListener('playing',function(){
@@ -182,7 +181,6 @@ function updUI(){
 }
 function toggleMode(){M=M==='loop'?'play':'loop';updUI();toast(M==='loop'?'循环模式':'连播模式')}
 function toggleSource(){SL.length||loadSources().then(toggleSource);Si++;if(Si>=SL.length)Si=-1;updUI();toast(Si===-1?'全部':SL[Si]);playNext()}
-function toggleSourceBack(){SL.length||loadSources().then(toggleSourceBack);Si--;if(Si<-1)Si=SL.length-1;updUI();toast(Si===-1?'全部':SL[Si]);playNext()}
 function toggleLove(){if(Hi<0||Hi>=H.length){toast('暂无');return}var a=H[Hi];if(GF().some(function(x){return x.token===a.token})){rmFav(a.token);updLoveUI(false);toast('取消收藏')}else addFav(a.token,a.name)}
 function showFav(){
   var f=GF(),el=document.getElementById('favList');
@@ -254,14 +252,12 @@ function toggleFS(){
 /* PC keyboard */
 if(!isM){document.addEventListener('keydown',function(e){
   switch(e.key){
-    case ' ':case 'k':e.preventDefault();player.paused?player.play().catch(function(){}):player.pause();break;
+    case ' ':e.preventDefault();player.paused?player.play().catch(function(){}):player.pause();break;
     case 'ArrowLeft':playPrev();break;
     case 'ArrowRight':playNext();break;
-    case 'ArrowUp':toggleSourceBack();break;
+    case 'ArrowUp':toggleMode();break;
     case 'ArrowDown':toggleSource();break;
-    case 'f':case 'F':toggleFS();break;
-    case 'v':case 'V':soundOn?mute():unmute();break;
-    case 'm':case 'M':toggleMode();break
+    case 'Enter':toggleFS();break;
   }
 })}
 
