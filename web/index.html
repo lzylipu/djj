@@ -149,7 +149,6 @@ function startWatchdog(label){
   var myGen=gen;
   playWatchdog=setTimeout(function(){
     if(!playingNow && myGen===gen){
-      console.log('[watchdog] '+label+' >2s no playing -> release old stream & next');
       if(vidS)vidS.textContent='上游太慢,自动跳过';
       // 释放旧流,避免旧 aiter_bytes 继续推流占带宽
       try{player.pause()}catch(e){}
@@ -168,11 +167,11 @@ async function playNext(){
   for(var retry=0;retry<3;retry++){
     try{
       var d=await fetchRandom();
-      if(myGen!==gen){console.log('[playNext] stale, aborted');return}
+      if(myGen!==gen){return}
       player.src='/api/play?token='+encodeURIComponent(d.token);
       startWatchdog('source='+d.name);
       try{await player.play()}catch(e){}
-      if(myGen!==gen){console.log('[playNext] stale after play(), aborted');return}
+      if(myGen!==gen){return}
       player.muted=false;soundOn=true;if(sHint)sHint.style.display='none';
       if(vidS)vidS.textContent='▶ 播放中';
       if(vidN)vidN.textContent='@'+(d.name||'未知');
