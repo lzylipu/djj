@@ -1,17 +1,8 @@
-<div align="center">
-
 # 🎬 DJJ — Random Short Video Player
 
 **🎨 TikTok-Style · 📱 PC/Mobile Adaptive · 🔒 Secure Playback · 🐳 One-Click Deploy**
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/lzylipu/djj?style=flat-square&logo=docker&color=%230db7ed)](https://hub.docker.com/r/lzylipu/djj)
-[![GitHub License](https://img.shields.io/github/license/lzylipu/djj?style=flat-square)](./LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
-[![Platform](https://img.shields.io/badge/Arch-amd64%20%7C%20arm64-blue?style=flat-square&logo=linux&logoColor=white)]()
-
 **English | [中文](./README.md)**
-
-</div>
 
 ---
 
@@ -319,8 +310,5 @@ This project is licensed under the [MIT License](./LICENSE).
 
 Copyright (c) 2024 lzylipu
 
-<div align="center">
-
 **⭐ If this project helps you, give it a Star! ⭐**
 
-</div>

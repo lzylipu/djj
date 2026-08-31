@@ -1,8 +1,17 @@
+<div align="center">
+
 # 🎬 DJJ — 随机短视频播放站
 
 **🎨 仿抖音风格 · 📱 PC/手机自适应 · 🔒 安全播放 · 🐳 一键部署**
 
+[![Docker Pulls](https://img.shields.io/docker/pulls/lzylipu/djj?style=flat-square&logo=docker&color=%230db7ed)](https://hub.docker.com/r/lzylipu/djj)
+[![GitHub License](https://img.shields.io/github/license/lzylipu/djj?style=flat-square)](./LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/Arch-amd64%20%7C%20arm64-blue?style=flat-square&logo=linux&logoColor=white)]()
+
 **[English](./README_EN.md) | 中文**
+
+</div>
 
 ---
 
@@ -364,5 +373,8 @@ docker restart djj
 
 Copyright (c) 2024 lzylipu
 
+<div align="center">
+
 **⭐ 如果这个项目对你有帮助，点个 Star 支持一下！⭐**
 
+</div>
