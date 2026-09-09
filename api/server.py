@@ -164,6 +164,19 @@ async def _fetch_one_source(name, meta):
         resp.raise_for_status()
         ct = (resp.headers.get("content-type") or "").lower()
 
+        # ---- HLS / m3u8 流: 需要 ffmpeg 转码成 mp4 才能给原生 <video> 播 ----
+        # 匹配: mode=auto + content-type 含 mpegurl, 或 mode=m3u8, 或 URL 以 .m3u8 结尾
+        url_lower = url.lower()
+        is_hls = (mode == "m3u8") or ("mpegurl" in ct) or url_lower.endswith(".m3u8")
+        if is_hls:
+            # HLS 播放列表里的分片是相对 URL, 必须记录主 m3u8 地址(ffmpeg 会自己拉分片)
+            if mode == "m3u8":
+                hls_url = url  # 用户给的原始 m3u8 地址
+            else:
+                hls_url = str(resp.url)  # auto: 重定向后最终 m3u8 地址
+            token = register_remote(hls_url, disp, is_m3u8=True)
+            return {"token": token, "name": disp, "remote": True}
+
         # 直接 mp4 流(资源网有时直接吐 mp4) 或 mode=mp4
         if mode == "mp4" or "video" in ct or "octet-stream" in ct:
             vu = str(resp.url)
@@ -345,6 +358,26 @@ async def api_play(token: str):
             vid_url = info["url"]
             if not (vid_url.startswith("http://") or vid_url.startswith("https://")):
                 return JSONResponse({"error": "invalid remote url in token"}, status_code=502)
+
+            # HLS 源: 用 ffmpeg 把 m3u8 实时转成 fragmented mp4 流, 浏览器 <video> 才能播
+            if info.get("is_m3u8"):
+                ff = await asyncio.create_subprocess_exec(
+                    FFMPEG_PATH, "-v", "error", "-i", vid_url,
+                    "-preset", "veryfast", "-crf", "26",
+                    "-c:a", "aac",
+                    "-movflags", "frag_keyframe+empty_moov",
+                    "-f", "mp4", "-",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                if ff.stdout is None:
+                    return JSONResponse({"error": "ffmpeg stream unavailable"}, status_code=502)
+                return StreamingResponse(
+                    content=ff.stdout,
+                    media_type="video/mp4",
+                    headers={"X-HLS-Transcoded": "1"},
+                )
+
             sep = "&" if "?" in vid_url else "?"
             play_url = f"{vid_url}{sep}_t={random.random()}"
             resp = await http_client.get(play_url,

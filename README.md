@@ -18,7 +18,7 @@
 | 📱 | **自适应 UI** — 仿抖音交互，手机全屏手势 & PC 键盘快捷键完美适配 |
 | 🔀 | **多源融合** — 本地目录挂载 + 远程 API（302/JSON/MP4/HTML 自动识别） |
 | 🔒 | **安全播放** — HMAC-SHA256 签名 token，不暴露真实文件路径 |
-| 🔄 | **智能转码** — 非 H.264 视频自动 ffmpeg 实时转码，兼容所有格式 |
+| 🔄 | **智能转码** — 非 H.264 / HLS(m3u8) 视频自动 ffmpeg 实时转码，兼容所有格式 |
 | 🐙 | **多架构** — 支持 `linux/amd64` + `linux/arm64` |
 | 🎨 | **零框架前端** — 纯 HTML/CSS/JS，轻量极速加载 |
 
@@ -182,6 +182,7 @@ docker run -d \
 | 🎥 `mp4` | 直接返回 `video/*` 内容流 | — |
 | 📄 `html` | 返回 HTML，提取 `<video src="...">` | `tucdn.wpon.cn` |
 | 📝 `text_url` | 返回纯文本 URL（如 `https://xxx.mp4`） | `diskgirl.com` |
+| 📶 `m3u8` | HLS 流，内置 ffmpeg 实时转码成 mp4 给浏览器播 | 任意 `.m3u8` 地址 |
 
 ### 完整 `config.yaml` 示例
 

@@ -33,13 +33,14 @@ server:
 #   url         远程 API(必填,http/https 开头)
 #   group       分组名(远程源必填,默认填 "网络";所有同 group 的远程源合成一个"聚合组",
 #               前端下拉只看见 group 名,组内按 weight 加权随机,失败自动降级下一个未熔断源)
-#   mode        远程源响应类型,可选 302 / json / html / mp4 / text_url / auto (默认 auto)
+#   mode        远程源响应类型,可选 302 / json / html / mp4 / m3u8 / text_url / auto (默认 auto)
 #               302      = API 返回 302 跳转,Location 头指向 mp4 直链
 #               json     = API 返回 JSON,需配 json_path 指定视频字段路径(支持点号取嵌套)
 #               html     = API 返回 HTML,自动提取 <video src="...">
 #               mp4      = API 直接返回 video/* 内容流
+#               m3u8     = HLS 流,DJJ 用内置 ffmpeg 实时转码成 mp4 给浏览器播
 #               text_url = API 返回纯文本 URL,如 https://xxx.mp4
-#               auto     = 自动嗅探(默认,多数情况无需手动指定)
+#               auto     = 自动嗅探(默认,含 mpegurl 会当 HLS 处理)
 #   json_path   仅 mode=json 时必填,如 "data.video" 或 "data.list.0.url"
 #   weight      权重(可选,默认 1,整数;同组内 weight=sum 后按比例随机)
 #   retry       单源允许重试次数(可选,默认 2,连续失败超此次数即熔断此源)

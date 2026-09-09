@@ -74,11 +74,12 @@ def register_file(file_path):
     return generate_token(file_path)
 
 
-def register_remote(video_url, name="未知"):
-    """为远程视频URL生成一次性token(短 TTL,过期即清)。"""
+def register_remote(video_url, name="未知", is_m3u8=False):
+    """为远程视频URL生成一次性token(短 TTL,过期即清)。
+    is_m3u8=True 表示该远程源是 HLS 流, /api/play 需 ffmpeg 转码成 mp4 才能给浏览器播。"""
     token = "r_" + uuid.uuid4().hex[:24]
     exp = _now() + REMOTE_TTL
-    _remote_map[token] = {"url": video_url, "name": name, "expire": exp}
+    _remote_map[token] = {"url": video_url, "name": name, "expire": exp, "is_m3u8": is_m3u8}
     _token_map[token] = video_url  # 兼容resolve_token
     _token_expire[token] = exp
     _gc_if_needed()
