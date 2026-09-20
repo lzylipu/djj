@@ -7,7 +7,7 @@ _remote_map = {}      # remote_token -> {"url": "视频直链", "name": "标题"
 _token_expire = {}    # token -> absolute expire timestamp (unix seconds)
 
 # 本地/远程播放 token 同一存活时长;超过 MAX_TOKENS 条时惰性清理过期项
-TOKEN_TTL = 600           # 10 分钟后失效;抽片时按路径自动换新牌,不用重启
+TOKEN_TTL = 600           # 空闲 10 分钟失效;正在播/抽片会自动续,不用重启
 MAX_TOKENS = 4096
 
 
@@ -44,6 +44,17 @@ def _expired(token):
     return exp <= _now()
 
 
+def _touch(token):
+    """正在用就往后推 TOKEN_TTL,停着不用才过期。不用重启。"""
+    if token not in _token_map:
+        return
+    exp = _now() + TOKEN_TTL
+    _token_expire[token] = exp
+    info = _remote_map.get(token)
+    if info is not None:
+        info["expire"] = exp
+
+
 def generate_token(file_path, expire_seconds=TOKEN_TTL):
     """本地文件 token: 与远程同一 TOKEN_TTL,抽片时按路径自动换新牌。
 
@@ -71,6 +82,7 @@ def resolve_token(token):
     if _expired(token):
         _drop_token(token)
         return None
+    _touch(token)
     return _token_map.get(token)
 
 
@@ -96,6 +108,7 @@ def is_remote_token(token):
     if _expired(token):
         _drop_token(token)
         return False
+    _touch(token)
     return True
 
 
@@ -105,4 +118,5 @@ def get_remote_info(token):
     if _expired(token):
         _drop_token(token)
         return None
+    _touch(token)
     return _remote_map.get(token)
