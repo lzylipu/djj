@@ -6,9 +6,8 @@ _path_map = {}        # file_path -> token
 _remote_map = {}      # remote_token -> {"url": "视频直链", "name": "标题", "expire": ts}
 _token_expire = {}    # token -> absolute expire timestamp (unix seconds)
 
-# 远程一次性 token 存活时长;超过 MAX_TOKENS 条时惰性清理过期项
-REMOTE_TTL = 600          # 远程播放 token 10 分钟后失效(防重放 + 防泄漏)
-FILE_TTL = 24 * 3600      # 本地播放链 24h 后作废;抽片时按路径自动换新牌,不用重启
+# 本地/远程播放 token 同一存活时长;超过 MAX_TOKENS 条时惰性清理过期项
+TOKEN_TTL = 600           # 10 分钟后失效;抽片时按路径自动换新牌,不用重启
 MAX_TOKENS = 4096
 
 
@@ -45,12 +44,11 @@ def _expired(token):
     return exp <= _now()
 
 
-def generate_token(file_path, expire_seconds=FILE_TTL):
-    """本地文件 token: 默认 24h 过期,抽片时按路径自动换新牌。
+def generate_token(file_path, expire_seconds=TOKEN_TTL):
+    """本地文件 token: 与远程同一 TOKEN_TTL,抽片时按路径自动换新牌。
 
-    已发出去的 /api/play?token= 过期后 403,避免复制链长期外挂。
+    已发出去的 /api/play?token= 过期后 403。
     索引存路径不存死牌,/api/random 每次 register_file,过期会续,不用重启。
-    远程牌仍走 register_remote 的短 TTL。
     """
     if file_path in _path_map:
         tok = _path_map[file_path]
@@ -84,7 +82,7 @@ def register_remote(video_url, name="未知", is_m3u8=False):
     """为远程视频URL生成一次性token(短 TTL,过期即清)。
     is_m3u8=True 表示该远程源是 HLS 流, /api/play 需 ffmpeg 转码成 mp4 才能给浏览器播。"""
     token = "r_" + uuid.uuid4().hex[:24]
-    exp = _now() + REMOTE_TTL
+    exp = _now() + TOKEN_TTL
     _remote_map[token] = {"url": video_url, "name": name, "expire": exp, "is_m3u8": is_m3u8}
     _token_map[token] = video_url  # 兼容resolve_token
     _token_expire[token] = exp
