@@ -4,8 +4,8 @@ from pathlib import Path
 from .config import CFG
 from .auth import register_file, is_remote_token, get_remote_info
 
-_source_index = {}      # name -> [token, ...]  (local文件token列表/remote为空)
-_name_index = {}        # token -> display_name
+_source_index = {}      # name -> [file_path, ...]  本地按路径存,抽片时 register_file 换活牌
+_name_index = {}        # file_path -> display_name
 _remote_sources = {}    # name -> {"url": "...", "group": "...", "mode": "auto", "weight": 1, "retry": 1, ...}
 _local_sources = {}     # name -> path
 _group_index = {}       # group_name -> [source_name, ...]   聚合组
@@ -63,14 +63,15 @@ def scan_all():
             print(f"[djj] WARNING: {path} not found ({name})")
             _source_index[name] = []
             continue
-        tokens = []
+        paths = []
         for f in p.rglob("*"):
             if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS:
-                token = register_file(str(f))
-                tokens.append(token)
-                _name_index[token] = f.stem
-        _source_index[name] = tokens
-        print(f"[djj] LOCAL {name}: {len(tokens)} videos from {path}")
+                fp = str(f)
+                register_file(fp)
+                paths.append(fp)
+                _name_index[fp] = f.stem
+        _source_index[name] = paths
+        print(f"[djj] LOCAL {name}: {len(paths)} videos from {path}")
 
 
 def is_remote_source(name):
@@ -170,11 +171,18 @@ def get_source_list():
     return local_names + remote_names + group_names
 
 
+def _live_token(file_path):
+    """抽片时按路径换活牌:过期自动续,不用重启。"""
+    if not file_path:
+        return None
+    return register_file(file_path)
+
+
 def get_random(name):
     if is_remote_source(name) or is_group_source(name):
         return None  # server 层 fetch
-    tokens = _source_index.get(name, [])
-    return random.choice(tokens) if tokens else None
+    paths = _source_index.get(name, [])
+    return _live_token(random.choice(paths)) if paths else None
 
 
 def get_random_any():
@@ -182,13 +190,12 @@ def get_random_any():
     all_sources = list(_source_index.keys())
     if not all_sources:
         return None
-    local_tokens = []
+    local_paths = []
     for name in all_sources:
         if not is_remote_source(name) and not is_group_source(name):
-            tokens = _source_index.get(name, [])
-            local_tokens.extend(tokens)
-    if local_tokens:
-        return random.choice(local_tokens)
+            local_paths.extend(_source_index.get(name, []))
+    if local_paths:
+        return _live_token(random.choice(local_paths))
     return None
 
 
@@ -196,11 +203,15 @@ def get_name(token):
     """统一显示名: 本地token -> 文件名(stem); 远程token(r_xxx) -> 二级域名根
     远程的显示名在 register_remote(_fetch_one_source里)已通过 _display_name
     提取为源URL的二级域名根(如 https://api.yujn.cn -> yujn.cn),存在 _remote_map,
-    这里只负责把它从 _remote_map 取出来,跟本地 _name_index 统一入口.
+    这里只负责把它从 _remote_map 取出来,跟本地路径名统一入口.
     """
     if is_remote_token(token):
         info = get_remote_info(token) or {}
         return info.get("name") or "未知"
+    from .auth import resolve_token
+    fp = resolve_token(token)
+    if fp:
+        return _name_index.get(fp, Path(fp).stem)
     return _name_index.get(token, "未知")
 
 
@@ -281,14 +292,15 @@ def _hot_reload_sources():
                 _source_index[name] = []
                 continue
             from .auth import register_file
-            tokens = []
+            paths = []
             for f in p.rglob("*"):
                 if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS:
-                    token = register_file(str(f))
-                    tokens.append(token)
-                    _name_index[token] = f.stem
-            _source_index[name] = tokens
-            print(f"[djj] LOCAL {name}: {len(tokens)} videos from {path}")
+                    fp = str(f)
+                    register_file(fp)
+                    paths.append(fp)
+                    _name_index[fp] = f.stem
+            _source_index[name] = paths
+            print(f"[djj] LOCAL {name}: {len(paths)} videos from {path}")
     # 清掉熔断表里已被删除的源(原地改写,不重新赋值)
     for k in list(_group_blacklist.keys()):
         if k[1] not in _remote_sources and k[0] not in _group_index:
