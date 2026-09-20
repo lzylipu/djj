@@ -8,7 +8,6 @@ _token_expire = {}    # token -> absolute expire timestamp (unix seconds)
 
 # 远程一次性 token 存活时长;超过 MAX_TOKENS 条时惰性清理过期项
 REMOTE_TTL = 600          # 远程播放 token 10 分钟后失效(防重放 + 防泄漏)
-FILE_TTL = 24 * 3600      # 文件 token 默认 1 天(与原 expire_seconds 分桶一致)
 MAX_TOKENS = 4096
 
 
@@ -45,17 +44,21 @@ def _expired(token):
     return exp <= _now()
 
 
-def generate_token(file_path, expire_seconds=FILE_TTL):
+def generate_token(file_path):
+    """本地文件 token: 进程存活期间不过期。
+
+    本地源只在启动时 scan 一次,索引长期拿同一张牌。
+    若给本地牌加 TTL,过期后 /api/random 仍发旧牌、/api/play 403,
+    前端会当成源失效无限跳。远程牌走 register_remote 的短 TTL。
+    """
     if file_path in _path_map:
         tok = _path_map[file_path]
         if tok in _token_map and not _expired(tok):
             return tok
-        _drop_token(tok)  # 已过期,让位重新生成
-    ts = str(int(time.time() / expire_seconds))
-    msg = f"{file_path}:{ts}"
-    sig = hmac.new(CFG["api_secret"].encode(), msg.encode(), hashlib.sha256).hexdigest()[:32]
+        _drop_token(tok)
+    sig = hmac.new(CFG["api_secret"].encode(), file_path.encode(), hashlib.sha256).hexdigest()[:32]
     _token_map[sig] = file_path
-    _token_expire[sig] = _now() + expire_seconds
+    # 不写入 _token_expire → _expired() 对本地牌恒为 False
     _path_map[file_path] = sig
     _gc_if_needed()
     return sig
